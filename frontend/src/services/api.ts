@@ -13,6 +13,8 @@ import {
   VehicleCategory,
   PaymentMethod,
   VerificationStatus,
+  GeoSearchResult,
+  GeoReverseResult,
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -304,5 +306,20 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ adminResponse, status }),
       }),
+  },
+
+  geo: {
+    search: (q: string, lat?: number, lng?: number) => {
+      const p = new URLSearchParams({ q });
+      if (lat !== undefined) p.append('lat', lat.toString());
+      if (lng !== undefined) p.append('lng', lng.toString());
+      return request<GeoSearchResult[]>(`/geo/search?${p.toString()}`);
+    },
+    reverse: (lat: number, lng: number) =>
+      request<GeoReverseResult>(`/geo/reverse?lat=${lat}&lng=${lng}`),
+    route: (fromLat: number, fromLng: number, toLat: number, toLng: number) =>
+      request<{ distanceKm: number; durationMinutes: number; geometry: [number, number][] }>(
+        `/geo/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`
+      ),
   },
 };

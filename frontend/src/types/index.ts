@@ -81,11 +81,32 @@ export interface CouponApplied {
   description: string;
 }
 
+export interface GeoSearchResult {
+  placeId: string;
+  name: string;
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  type: string;
+}
+
+export interface GeoReverseResult {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  street?: string;
+  suburb?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+}
+
 export interface FareEstimateResponse {
   distanceKm: number;
   durationMinutes: number;
   estimates: CategoryEstimate[];
   couponApplied?: CouponApplied;
+  routeGeometry?: [number, number][];
 }
 
 export interface Ride {
