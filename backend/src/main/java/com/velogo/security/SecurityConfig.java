@@ -52,6 +52,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers("/api/v1/captains/**").hasAnyAuthority("ROLE_CAPTAIN", "ROLE_ADMIN")
+                        .requestMatchers("/", "/index.html", "/assets/**", "/favicon.svg", "/icons.svg", "/book", "/login", "/register", "/captain/**", "/safety", "/customer/**", "/admin/**", "/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -26,10 +26,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const stompClientRef = useRef<Client | null>(null);
 
   useEffect(() => {
-    const socketFactory = () => new SockJS('/ws');
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const brokerURL = `${protocol}//${window.location.host}/ws`;
 
     const client = new Client({
-      webSocketFactory: socketFactory,
+      brokerURL: brokerURL,
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
