@@ -48,7 +48,8 @@ public class RideDtos {
             BigDecimal distanceKm,
             Integer durationMinutes,
             List<CategoryEstimateDto> estimates,
-            CouponAppliedDto couponApplied
+            CouponAppliedDto couponApplied,
+            List<List<Double>> routeGeometry
     ) {}
 
     public record BookRideRequest(

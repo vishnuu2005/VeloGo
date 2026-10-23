@@ -37,6 +37,8 @@ app:
   routing:
     osrm-url: ${OSRM_URL:https://router.project-osrm.org}
     use-fallback-haversine: true
+  geocoding:
+    nominatim-url: ${NOMINATIM_URL:https://nominatim.openstreetmap.org}
 
 springdoc:
   api-docs:

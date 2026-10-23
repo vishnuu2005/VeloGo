@@ -21,13 +21,18 @@ public class RoutingService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public record RouteInfo(BigDecimal distanceKm, Integer durationMinutes) {}
+    public record RouteInfo(
+            BigDecimal distanceKm,
+            Integer durationMinutes,
+            java.util.List<java.util.List<Double>> geometry
+    ) {}
 
     public RouteInfo getRoute(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng) {
-        if (!useFallbackHaversine && osrmUrl != null && !osrmUrl.isBlank()) {
+        if (osrmUrl != null && !osrmUrl.isBlank()) {
             try {
                 // OSRM coordinates format: {lon},{lat};{lon},{lat}
-                String url = String.format("%s/route/v1/driving/%f,%f;%f,%f?overview=false",
+                String url = String.format(java.util.Locale.US,
+                        "%s/route/v1/driving/%f,%f;%f,%f?overview=full&geometries=geojson",
                         osrmUrl, fromLng.doubleValue(), fromLat.doubleValue(), toLng.doubleValue(), toLat.doubleValue());
 
                 Map<?, ?> response = restTemplate.getForObject(url, Map.class);
@@ -40,7 +45,26 @@ public class RoutingService {
 
                         BigDecimal km = BigDecimal.valueOf(distanceMeters / 1000.0).setScale(2, RoundingMode.HALF_UP);
                         int mins = (int) Math.ceil(durationSeconds / 60.0);
-                        return new RouteInfo(km, Math.max(1, mins));
+
+                        // Extract road polyline geometry: OSRM gives [[lng, lat], ...] -> convert to [[lat, lng], ...]
+                        java.util.List<java.util.List<Double>> latLngGeometry = new java.util.ArrayList<>();
+                        Map<?, ?> geometryMap = (Map<?, ?>) firstRoute.get("geometry");
+                        if (geometryMap != null && geometryMap.get("coordinates") instanceof java.util.List<?> coordsList) {
+                            for (Object pt : coordsList) {
+                                if (pt instanceof java.util.List<?> pair && pair.size() >= 2) {
+                                    double lng = ((Number) pair.get(0)).doubleValue();
+                                    double lat = ((Number) pair.get(1)).doubleValue();
+                                    latLngGeometry.add(java.util.List.of(lat, lng));
+                                }
+                            }
+                        }
+
+                        if (latLngGeometry.isEmpty()) {
+                            latLngGeometry.add(java.util.List.of(fromLat.doubleValue(), fromLng.doubleValue()));
+                            latLngGeometry.add(java.util.List.of(toLat.doubleValue(), toLng.doubleValue()));
+                        }
+
+                        return new RouteInfo(km, Math.max(1, mins), latLngGeometry);
                     }
                 }
             } catch (Exception e) {
@@ -60,7 +84,12 @@ public class RoutingService {
         double travelHours = finalKm.doubleValue() / 22.0;
         int durationMins = (int) Math.ceil(travelHours * 60) + 2;
 
-        return new RouteInfo(finalKm, Math.max(3, durationMins));
+        java.util.List<java.util.List<Double>> fallbackGeom = java.util.List.of(
+                java.util.List.of(fromLat.doubleValue(), fromLng.doubleValue()),
+                java.util.List.of(toLat.doubleValue(), toLng.doubleValue())
+        );
+
+        return new RouteInfo(finalKm, Math.max(3, durationMins), fallbackGeom);
     }
 
     public static double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
