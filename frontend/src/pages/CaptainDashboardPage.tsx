@@ -38,7 +38,8 @@ export const CaptainDashboardPage: React.FC = () => {
   const [otpError, setOtpError] = useState<string | null>(null);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [isSimulatingLoc, setIsSimulatingLoc] = useState(false);
+  const [gpsActive, setGpsActive] = useState(false);
+  const [lastCoords, setLastCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // Load initial data
   const loadData = async () => {

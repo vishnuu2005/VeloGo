@@ -101,12 +101,12 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        {/* 1-Click Demo Profiles */}
-        <div className="pt-4 border-t border-slate-100 space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase text-center">
-            One-Click Test Accounts
-          </p>
-          <div className="grid grid-cols-3 gap-2">
+        {/* Development Quick-Fill Drawer */}
+        <details className="pt-2 border-t border-slate-100 text-center group">
+          <summary className="text-[11px] font-bold text-slate-400 hover:text-slate-600 uppercase cursor-pointer select-none">
+            Development Quick-Fill
+          </summary>
+          <div className="grid grid-cols-3 gap-2 mt-2">
             <button
               type="button"
               onClick={() => handleQuickDemoLogin('customer@velogo.com', 'password123')}
@@ -129,7 +129,7 @@ export const LoginPage: React.FC = () => {
               Admin
             </button>
           </div>
-        </div>
+        </details>
 
         <p className="text-center text-xs text-slate-500">
           New to VeloGo?{' '}
