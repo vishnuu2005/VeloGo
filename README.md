@@ -13,22 +13,22 @@
 ---
 
 ## Table of Contents
-1. [Platform Architecture](#platform-architecture)
-2. [Technology Stack](#technology-stack)
-3. [User Roles & Demo Credentials](#user-roles--demo-credentials)
-4. [Ride Lifecycle State Machine](#ride-lifecycle-state-machine)
-5. [Core Engines & Systems](#core-engines--systems)
-   - [Matching & Dispatch Engine](#matching--dispatch-engine)
-   - [Fare Calculation & Pricing Service](#fare-calculation--pricing-service)
-   - [Map & Location Intelligence](#map--location-intelligence)
-   - [Payments & Receipts](#payments--receipts)
-   - [Real-Time STOMP WebSockets](#real-time-stomp-websockets)
-6. [Project Structure](#project-structure)
-7. [Getting Started (Local Zero-Config Mode)](#getting-started-local-zero-config-mode)
-8. [Docker & Containerized Deployment](#docker--containerized-deployment)
-9. [Automated Testing & E2E Validation](#automated-testing--e2e-validation)
-10. [REST API & Swagger Documentation](#rest-api--swagger-documentation)
-11. [Troubleshooting & FAQ](#troubleshooting--faq)
+1. [Platform Architecture](#1-platform-architecture)
+2. [Prerequisites & Supported Versions](#2-prerequisites--supported-versions)
+3. [Environment Configuration](#3-environment-configuration)
+4. [Local Installation & Quickstart](#4-local-installation--quickstart)
+5. [Database Setup & Migrations](#5-database-setup--migrations)
+6. [Map, Geocoding & Routing Configuration](#6-map-geocoding--routing-configuration)
+7. [Browser Location & Geolocation Guide](#7-browser-location--geolocation-guide)
+8. [Ride Lifecycle State Machine](#8-ride-lifecycle-state-machine)
+9. [Payment Gateway & Webhook Setup](#9-payment-gateway--webhook-setup)
+10. [Production Security, CORS & HTTPS](#10-production-security-cors--https)
+11. [Creating the First Administrator](#11-creating-the-first-administrator)
+12. [Automated Testing & Verification](#12-automated-testing--verification)
+13. [Production Deployment Guide](#13-production-deployment-guide)
+14. [Health Checks & Troubleshooting](#14-health-checks--troubleshooting)
+15. [Database Backup & Restore](#15-database-backup--restore)
+16. [REST API & Swagger Documentation](#16-rest-api--swagger-documentation)
 
 ---
 
@@ -50,6 +50,7 @@ VeloGo is engineered as a clean **modular monolith** with strong separation of c
                       |     Spring Boot 3.3.4 Monolith     |
                       |  Security (JWT) | Dispatch Engine  |
                       |  Fare Engine    | Payment Adapter  |
+                      |  Nominatim Proxy| OSRM Routing     |
                       +-----------------+------------------+
                                         |
                  +----------------------+----------------------+
@@ -57,62 +58,122 @@ VeloGo is engineered as a clean **modular monolith** with strong separation of c
                  v                                             v
 +---------------------------------+           +---------------------------------+
 |        Primary Database         |           |       External Integrations     |
-|  - Dev: Embedded H2 File DB     |           |  - OSRM / Haversine Routing     |
-|  - Prod: PostgreSQL 16 PostGIS  |           |  - Razorpay Test / Dev Simulator|
-|  - Flyway Versioned Migrations  |           |  - OpenStreetMap Tiles          |
+|  - Dev: Embedded H2 File DB     |           |  - OSRM Road Geometry (GeoJSON) |
+|  - Prod: PostgreSQL 16 PostGIS  |           |  - Nominatim Address Search     |
+|  - Flyway Versioned Migrations  |           |  - Razorpay Online Payments     |
 +---------------------------------+           +---------------------------------+
 ```
 
 ---
 
-## 2. Technology Stack
+## 2. Prerequisites & Supported Versions
 
-### Frontend
-- **Framework**: React 19 with TypeScript and Vite 8.
-- **Styling**: Tailwind CSS v4 with custom VeloGo Warm Amber (`#f59e0b`) & Deep Navy (`#0f172a`) branding.
-- **Mapping**: Leaflet 1.9 with OpenStreetMap tiles and custom SVG pins for Pickup, Drop, and Captain GPS navigation.
-- **Real-Time Communication**: `@stomp/stompjs` and `sockjs-client` over WebSocket.
-- **Routing & State**: React Router 7, TanStack Query v5, Context API (`AuthContext`, `SocketContext`).
-- **Form Validation**: React Hook Form with Zod schemas.
-- **Icons & Polish**: Lucide React icons, Canvas Confetti for ride celebrations.
-
-### Backend
-- **Framework**: Java 21, Spring Boot 3.3.4.
-- **Security**: Spring Security 6 with stateless JWT Bearer token authentication (`io.jsonwebtoken 0.12.6`), BCrypt password hashing, and role guards (`ROLE_CUSTOMER`, `ROLE_CAPTAIN`, `ROLE_ADMIN`).
-- **Data Persistence**: Spring Data JPA, Hibernate ORM 6.5, Flyway migrations (`db/migration/V1__initial_schema.sql`, `V2__seed_data.sql`).
-- **Database Support**:
-  - **Local Development**: Embedded file-based H2 database in PostgreSQL compatibility mode (zero Docker or local DB install needed).
-  - **Production / Docker**: PostgreSQL 16 with PostGIS spatial extension.
-- **WebSockets**: Spring WebSocket with STOMP message broker (`/topic/ride/{id}`, `/topic/captain/{id}/dispatch`, `/topic/user/{id}/notifications`).
-- **Payment Gateway**: Razorpay Java SDK 1.4.5 with built-in development fallback simulator for automated testing.
-- **Documentation**: Springdoc OpenAPI / Swagger UI 2.6.0.
+| Technology | Minimum Version | Recommended Version | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Java JDK** | 21 | 21.0.4+ LTS | Backend runtime |
+| **Maven** | 3.9+ | 3.9.8+ | Dependency management & compilation |
+| **Node.js** | 20.0.0+ | 20.18.0 LTS or 22+ | Frontend runtime & testing |
+| **npm** | 10.0+ | 10.8+ | Package manager |
+| **PostgreSQL** | 15.0+ | 16.4+ with PostGIS | Production spatial database |
+| **Docker** | 24.0+ | 27.0+ | Containerized production deployment |
 
 ---
 
-## 3. User Roles & Demo Credentials
+## 3. Environment Configuration
 
-All test accounts are pre-seeded via Flyway migration `V2__seed_data.sql`. The default password for all seed accounts is:
+Copy `.env.example` to `.env` in the root directory:
+
+```bash
+cp .env.example .env
 ```
-password123
-```
 
-| Role | Account Name | Email | Phone | Status / Details |
-| :--- | :--- | :--- | :--- | :--- |
-| **Admin** | System Admin | `admin@velogo.com` | `+919999999999` | Superuser: metrics, captain verification, pricing, coupons |
-| **Customer** | Arun Sharma | `customer@velogo.com` | `+919876543210` | 12 completed trips, 4.95 rating |
-| **Customer** | Priya Kapoor | `priya.k@velogo.com` | `+919876543211` | 5 completed trips, 4.88 rating |
-| **Captain (Bike)** | Rahul Verma | `captain.rahul@velogo.com` | `+919876543220` | **APPROVED** - Honda Activa 6G (`KA-01-EQ-1234`), 4.92 rating |
-| **Captain (Auto)** | Suresh Gowda | `captain.suresh@velogo.com` | `+919876543221` | **APPROVED** - Bajaj Compact RE (`KA-03-FA-5678`), 4.85 rating |
-| **Captain (Cab)** | Anand Kumar | `captain.anand@velogo.com` | `+919876543222` | **APPROVED** - Maruti Dzire (`KA-05-MM-9012`), 4.90 rating |
-| **Captain (Pending)** | Vikram Rathore | `captain.vikram@velogo.com` | `+919876543223` | **PENDING** - Hero Splendor (`KA-04-AB-3456`) - for Admin review testing |
+### Key Environment Variables
 
-> **Convenience Feature**: The VeloGo Login page (`/login`) includes **1-Click Demo Buttons** (`Demo Passenger`, `Demo Captain`, `Demo Admin`) to autofill credentials instantly.
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `SERVER_PORT` | `8080` | Port for the Spring Boot backend |
+| `SPRING_PROFILES_ACTIVE` | `dev` | Active profile: `dev` (H2 file DB), `docker`, or `prod` (PostgreSQL) |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/velogodb` | JDBC connection string |
+| `DB_USER` | `velogo_user` | Database username |
+| `DB_PASSWORD` | *(required in prod)* | Database password |
+| `JWT_SECRET` | *(64-char hex)* | 256-bit signing key for HMAC-SHA256 tokens |
+| `RAZORPAY_KEY_ID` | `rzp_test_...` | Razorpay Merchant Key ID |
+| `RAZORPAY_KEY_SECRET` | `...` | Razorpay Merchant Secret |
+| `RAZORPAY_WEBHOOK_SECRET`| `...` | Secret for verifying incoming Razorpay webhooks |
+| `PAYMENT_SIMULATE_MODE` | `true` (dev) / `false` (prod) | Toggle simulated payment confirmation |
+| `OSRM_URL` | `https://router.project-osrm.org` | OSRM routing service endpoint |
+| `NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | OpenStreetMap Nominatim geocoding API |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:80` | Permitted web client origins |
 
 ---
 
-## 4. Ride Lifecycle State Machine
+## 4. Local Installation & Quickstart
 
-VeloGo enforces a rigorous, server-side state machine. State jumps, unauthorized role overrides, or forged completions are strictly rejected:
+VeloGo runs immediately in local development mode without requiring Docker or any external cloud services.
+
+### Terminal 1: Backend Service (Port 8080)
+```bash
+cd backend
+mvn spring-boot:run
+```
+- Flyway automatically initializes the local embedded database at `backend/data/velogodb.*`.
+- Both REST endpoints and static embedded frontend assets are served on `http://localhost:8080`.
+- Swagger UI documentation is available at `http://localhost:8080/swagger-ui.html`.
+
+### Terminal 2: Frontend Dev Server with HMR (Port 5173)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Open `http://localhost:5173` in your browser.
+- Vite proxies `/api` and `/ws` to `http://localhost:8080` automatically.
+
+---
+
+## 5. Database Setup & Migrations
+
+Database migrations are managed using **Flyway**:
+
+- **Location**: `backend/src/main/resources/db/migration/`
+  - `V1__initial_schema.sql`: Core tables (`users`, `captains`, `rides`, `fare_configurations`, `payments`, `ratings`, `coupons`, `support_tickets`, `audit_logs`).
+  - `V2__seed_data.sql`: Initial seed data for development testing.
+- **Migration Execution**: Flyway applies pending migrations automatically on application startup.
+- **Manual Database Reset (Local Dev)**:
+  ```powershell
+  Remove-Item -Path "backend/data/*" -Recurse -Force
+  ```
+  Restarting the backend will re-create `velogodb` cleanly.
+
+---
+
+## 6. Map, Geocoding & Routing Configuration
+
+VeloGo utilizes a robust geospatial pipeline:
+
+1. **Map Tiles**: Leaflet 1.9 displays OpenStreetMap raster tiles (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`).
+2. **Address Autocomplete & Reverse Geocoding**:
+   - Client sends queries to `/api/v1/geo/search?q={query}` and `/api/v1/geo/reverse?lat={lat}&lng={lng}`.
+   - Spring Boot acts as a compliant reverse-proxy to Nominatim, adding a valid `User-Agent: VeloGo-Mobility/1.0`, handling bounding box viewport bias, and caching results in an in-memory TTL cache to comply with OSM rate limits.
+3. **Road Route Calculation**:
+   - Routing queries `/api/v1/geo/route?fromLat=...&fromLng=...&toLat=...&toLng=...`.
+   - Backend queries OSRM (`/route/v1/driving/...`) with `overview=full&geometries=geojson`.
+   - Coordinates are transformed into Leaflet `[lat, lng]` polylines (200+ points) and rendered on the client map.
+   - If the public OSRM server is unreachable, the system falls back to Haversine distance with an urban circuity multiplier (1.35x).
+
+---
+
+## 7. Browser Location & Geolocation Guide
+
+When accessing the booking interface:
+- **Permission Flow**: The browser requests location permission via the HTML5 Geolocation API (`navigator.geolocation.getCurrentPosition`).
+- **Reverse Geocoding**: Once coordinates are acquired, the app centers the map, places a radar-pulse marker, and calls `/api/v1/geo/reverse` to auto-populate the pickup address.
+- **Manual Override**: If the user denies permission, no fake coordinates are generated; the user enters their pickup location manually using the address search field or by clicking on the map.
+- **HTTPS Requirement**: Modern browsers only grant location access over secure origins (`https://` or `localhost`).
+
+---
+
+## 8. Ride Lifecycle State Machine
 
 ```
 [Customer Books] 
@@ -143,208 +204,134 @@ VeloGo enforces a rigorous, server-side state machine. State jumps, unauthorized
 
 ---
 
-## 5. Core Engines & Systems
+## 9. Payment Gateway & Webhook Setup
 
-### Matching & Dispatch Engine
-- Dispatches only to **APPROVED**, **ONLINE**, and **AVAILABLE** captains matching the requested vehicle category (`BIKE`, `AUTO`, `CAB`).
-- Calculates proximity via geographic coordinates (PostGIS or Haversine distance).
-- Creates an expiring dispatch offer with a live **45-second countdown** on the Captain console.
-- Employs database optimistic locking to ensure no two customers can be assigned the same captain concurrently.
-
-### Fare Calculation & Pricing Service
-- Formula:
-  $$\text{Total Fare} = \max(\text{Base Fare} + (\text{Distance} \times \text{PerKm}) + (\text{Duration} \times \text{PerMin}) + \text{Booking Fee} + \text{Taxes} - \text{Discount}, \text{Min Fare})$$
-- Configurable per category in the Admin Dashboard:
-  - **Bike**: ₹25.00 Base, ₹9.00/km, ₹1.50/min, ₹5.00 Booking fee, 5% Tax.
-  - **Auto**: ₹35.00 Base, ₹13.00/km, ₹2.00/min, ₹7.00 Booking fee, 5% Tax.
-  - **Cab**: ₹60.00 Base, ₹19.00/km, ₹3.00/min, ₹15.00 Booking fee, 5% Tax.
-- Pre-seeded promo coupons:
-  - `VELO50`: 50% discount up to ₹50 on rides over ₹50.
-  - `FIRSTGO`: 30% discount up to ₹100 on rides over ₹100.
-  - `FREERIDE`: 100% discount up to ₹75 on rides over ₹50.
-
-### Map & Location Intelligence
-- Provider-agnostic routing interface (`RoutingService`).
-- Queries the public Open Source Routing Machine (OSRM) for driving distances, road durations, and route polylines.
-- Gracefully falls back to high-accuracy Haversine geometric road estimation if external routing networks are unreachable.
-
-### Payments & Receipts
-- **Cash on Completion**: Mark payment received upon arrival.
-- **Razorpay Checkout**: Test mode integration with server-side signature verification (`HMAC-SHA256`).
-- **Development Payment Simulator**: Automatically enabled when credentials are not configured, providing immediate, idempotent order creation, verification, and receipt rendering.
-- **Tax Invoices**: Generates a downloadable, printable tax receipt modal detailing base fare, distance charge, booking fees, GST, and coupon discounts.
+VeloGo supports two payment flows:
+1. **Cash on Delivery (CASH)**: Captain marks the payment collected upon trip completion.
+2. **Razorpay Online Payments (RAZORPAY)**:
+   - Backend creates a Razorpay Order (`/api/v1/payments/order`).
+   - Customer completes checkout via Razorpay Checkout Modal.
+   - Backend verifies the HMAC-SHA256 signature (`/api/v1/payments/verify`) using `RAZORPAY_KEY_SECRET`.
+   - **Webhook URL**: Configure `https://yourdomain.com/api/v1/payments/webhook` in the Razorpay Dashboard with the secret matching `RAZORPAY_WEBHOOK_SECRET`.
+   - **Simulation Mode**: Set `PAYMENT_SIMULATE_MODE=true` for automated local testing without live merchant keys.
 
 ---
 
-## 6. Project Structure
+## 10. Production Security, CORS & HTTPS
 
-```
-VeloGo/
-├── backend/
-│   ├── src/main/java/com/velogo/
-│   │   ├── config/              # OpenApi & CORS configuration
-│   │   ├── controller/          # REST endpoints (/api/v1/...)
-│   │   ├── domain/              # JPA Entities (User, Ride, Payment, etc.)
-│   │   ├── dto/                 # Type-safe Record DTOs
-│   │   ├── exception/           # Global exception handler & error envelopes
-│   │   ├── repository/          # Spring Data JPA Repositories
-│   │   ├── security/            # JWT Token Provider, Auth Filter, UserDetails
-│   │   ├── service/             # Ride, Fare, Dispatch, Payment, Admin logic
-│   │   └── websocket/           # STOMP broker configuration & event publisher
-│   ├── src/main/resources/
-│   │   ├── application.yml      # Base Spring Boot configuration
-│   │   ├── application-dev.yml  # Zero-config H2 dev profile
-│   │   └── db/migration/        # Flyway schema (V1) & seed data (V2)
-│   ├── Dockerfile               # Multi-stage Java 21 build
-│   └── pom.xml                  # Maven dependencies & build plugins
-├── frontend/
-│   ├── src/
-│   │   ├── components/          # Navbar, MapViewer, FareCard, RideStatusModal, etc.
-│   │   ├── context/             # AuthContext, SocketContext
-│   │   ├── pages/               # Landing, Booking, Captain, Admin, Safety, Auth
-│   │   ├── services/            # Axios/Fetch API client with JWT interceptor
-│   │   ├── types/               # TypeScript interfaces & enums
-│   │   ├── App.tsx              # React Router definitions
-│   │   └── index.css            # Tailwind v4 theme, Amber & Navy palettes
-│   ├── nginx.conf               # Production SPA router & WebSocket proxy
-│   ├── Dockerfile               # Production multi-stage Nginx container
-│   ├── vite.config.ts           # Vite bundler & API proxy configuration
-│   └── package.json
-├── docker-compose.yml           # Complete containerized stack (Postgres + Backend + Frontend)
-├── .env.example                 # Environment variables template
-└── README.md                    # Project documentation
+- **Stateless JWT**: Bearer tokens signed with HMAC-SHA256, verified on each request by `JwtAuthFilter`.
+- **Role-Based Guards**:
+  - `ROLE_CUSTOMER`: Access customer booking, history, and receipts.
+  - `ROLE_CAPTAIN`: Access driver cockpit, status updates, and GPS streaming.
+  - `ROLE_ADMIN`: Access administration overview, fare configuration, and audit logs.
+- **CORS**: Configured in `SecurityConfig.java` to restrict allowed origins based on `CORS_ALLOWED_ORIGINS`.
+- **Production HTTPS**: Terminated at Nginx or a cloud load balancer (e.g., Cloudflare, AWS ALB) before proxying to port 8080.
+
+---
+
+## 11. Creating the First Administrator
+
+In production, never use public default credentials. To bootstrap the initial administrator:
+
+```bash
+# Option A: Register via API then elevate via DB:
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullName": "Production Admin",
+    "email": "admin@yourcompany.com",
+    "phone": "+919876543210",
+    "password": "StrongSecretPassword2026!"
+  }'
+
+# Update role in PostgreSQL:
+psql -U velogo_user -d velogodb -c "UPDATE users SET role = 'ROLE_ADMIN' WHERE email = 'admin@yourcompany.com';"
 ```
 
 ---
 
-## 7. Getting Started (Local Zero-Config Mode)
+## 12. Automated Testing & Verification
 
-VeloGo is designed to run locally right out of the box with **zero required external cloud keys or database setup**.
+Run the test suites to verify system integrity:
 
-### Prerequisites
-- **Java 21 JDK**
-- **Maven 3.9+** (or use bundled wrapper)
-- **Node.js 20+** and **npm**
-
-### Step 1: Start the Backend (Port 8080)
-Open a terminal in the `backend/` directory:
 ```bash
-cd backend
-mvn spring-boot:run
-```
-- Flyway automatically initializes the embedded database (`backend/data/velogodb.*`) and seeds all demo accounts and fare rules.
-- Tomcat will start listening on `http://localhost:8080`.
-- Swagger UI will be available at `http://localhost:8080/swagger-ui.html`.
+# 1. Backend Unit Tests
+cd backend && mvn test
 
-### Step 2: Start the Frontend (Port 5173)
-Open a second terminal in the `frontend/` directory:
-```bash
-cd frontend
-npm install
-npm run dev
+# 2. Frontend Component Tests
+cd frontend && npm run test
+
+# 3. End-to-End 11-Step API Lifecycle Suite
+node C:\Users\arika\.gemini\antigravity-ide\brain\3241288d-7044-4ec4-9ef9-cc3fadd8d819\scratch\e2e_api_test.mjs
+
+# 4. Geospatial Endpoints Verification (Nominatim, OSRM, Route Polylines)
+node C:\Users\arika\.gemini\antigravity-ide\brain\3241288d-7044-4ec4-9ef9-cc3fadd8d819\scratch\test_geo_endpoints.mjs
 ```
-- Open your browser to `http://localhost:5173`.
-- The Vite proxy will route all `/api` and `/ws` requests directly to `http://localhost:8080`.
 
 ---
 
-## 8. Docker & Containerized Deployment
+## 13. Production Deployment Guide
 
-To launch the complete production stack (PostgreSQL + PostGIS, Backend, and Frontend behind Nginx):
-
+### Option A: Docker Compose (All-in-One)
 ```bash
-# In the root repository directory:
-docker-compose up --build
+docker-compose up --build -d
 ```
+Starts:
+- `velogo-postgres`: PostgreSQL 16 + PostGIS on port 5432.
+- `velogo-backend`: Spring Boot application on port 8080.
+- `velogo-frontend`: Nginx serving static SPA and reverse proxying on port 80.
 
-Services started:
-- **`postgres`**: Port `5432` with PostGIS extension.
-- **`backend`**: Port `8080` (Spring Boot production profile).
-- **`frontend`**: Port `80` (Nginx serving optimized SPA static build and proxying `/api` & `/ws`).
-
-Access the platform at:
-- Web Application: `http://localhost/`
-- Backend API & Swagger: `http://localhost/swagger-ui.html`
+### Option B: Cloud Deployment (AWS / GCP / DigitalOcean)
+1. Provision a managed PostgreSQL 16 instance.
+2. Build the backend JAR:
+   ```bash
+   cd backend && mvn clean package -DskipTests
+   java -jar -Dspring.profiles.active=prod target/velogo-backend-1.0.0.jar
+   ```
+3. Build the frontend:
+   ```bash
+   cd frontend && npm run build
+   ```
+4. Copy `dist/` to an S3/CloudFront bucket or Nginx static directory.
 
 ---
 
-## 9. Automated Testing & E2E Validation
+## 14. Health Checks & Troubleshooting
 
-### 1. Backend Unit & Service Tests
-Run JUnit 5 and Mockito tests for fare calculations, ride lifecycle, and security:
-```bash
-cd backend
-mvn test
-```
-
-### 2. Frontend Unit & Component Tests
-Run Vitest component tests:
-```bash
-cd frontend
-npm run test
-```
-
-### 3. End-to-End API Lifecycle Suite
-Run the automated 11-step Node.js integration script that tests the entire lifecycle from start to finish:
-```bash
-node scratch/e2e_api_test.mjs
-```
-
-**Verified Test Lifecycle Steps:**
-1. **Fare Estimation**: Computes route distance, duration, and pricing breakdown for Bike, Auto, Cab.
-2. **Customer Authentication**: Logs in `customer@velogo.com`, extracts JWT access token.
-3. **Captain Authentication**: Logs in `captain.rahul@velogo.com` with vehicle verification.
-4. **Admin Overview**: Fetches platform metrics, total customers, captains, and gross booking value.
-5. **Ride Booking**: Customer initiates ride request (`SEARCHING`), generating secure 4-digit OTP.
-6. **Captain Dispatch Acceptance**: Captain accepts incoming dispatch (`ACCEPTED`).
-7. **Captain Pickup Arrival**: Captain reaches passenger pickup (`ARRIVED`).
-8. **Trip Start with OTP**: Captain inputs customer's OTP (`IN_PROGRESS`).
-9. **Trip Completion**: Destination reached, backend calculates final fare (`COMPLETED`).
-10. **Payment Settlement**: Order created and verified with invoice generation (`SUCCESS`).
-11. **Customer Review**: Customer rates captain 5 stars with feedback (`200 OK`).
-
----
-
-## 10. REST API & Swagger Documentation
-
-When the backend is running, access interactive OpenAPI documentation at:
-- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
-- **OpenAPI JSON Spec**: `http://localhost:8080/v3/api-docs`
-
-### Key Endpoint Groups:
-- **Authentication**: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`
-- **Customer**: `GET /api/v1/customers/me`, `GET /api/v1/customers/me/rides`
-- **Ride Operations**: `POST /api/v1/rides/estimate`, `POST /api/v1/rides`, `GET /api/v1/rides/{id}`, `POST /api/v1/rides/{id}/cancel`
-- **Captain Cockpit**: `PATCH /api/v1/captains/availability`, `POST /api/v1/captains/location`, `POST /api/v1/captains/requests/{id}/accept`, `POST /api/v1/captains/rides/{id}/arrive`, `POST /api/v1/captains/rides/{id}/start`, `POST /api/v1/captains/rides/{id}/complete`
-- **Payments**: `POST /api/v1/payments/order`, `POST /api/v1/payments/verify`, `GET /api/v1/payments/{id}`
-- **Admin Governance**: `GET /api/v1/admin/overview`, `GET /api/v1/admin/captains`, `PATCH /api/v1/admin/captains/{id}/verification`, `GET /api/v1/admin/pricing`, `PUT /api/v1/admin/pricing/{category}`, `POST /api/v1/admin/coupons`, `GET /api/v1/admin/audit-logs`
-- **Support & Safety**: `POST /api/v1/support/rating`, `POST /api/v1/support/tickets`, `GET /api/v1/support/tickets/me`
-
----
-
-## 11. Troubleshooting & FAQ
-
-### 1. Port 8080 or 5173 already in use
-- On Windows PowerShell:
+- **Backend Health Check**:
+  ```bash
+  curl http://localhost:8080/actuator/health
+  # Expected Response: {"status":"UP"}
+  ```
+- **Port Conflicts**:
   ```powershell
+  # Windows: Check and kill conflicting process on port 8080
   Get-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess | Stop-Process -Force
-  Get-Process -Id (Get-NetTCPConnection -LocalPort 5173).OwningProcess | Stop-Process -Force
   ```
 
-### 2. Resetting the Local Embedded Database
-- To re-run all Flyway migrations and restore fresh seed accounts:
-  ```powershell
-  Remove-Item -Path "backend/data/*" -Recurse -Force
-  ```
-  Restarting the backend will re-create `velogodb.mv.db` cleanly with all initial accounts.
+---
 
-### 3. Razorpay Live Mode Configuration
-- By default, VeloGo runs with `app.payment.razorpay.simulator-enabled: true`.
-- To switch to Razorpay Test / Live mode:
-  1. Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` or system environment variables.
-  2. Set `RAZORPAY_SIMULATOR_ENABLED=false`.
+## 15. Database Backup & Restore
+
+### Backup
+```bash
+docker exec -t velogo-postgres pg_dump -U velogo_user -d velogodb -F c -b -v -f /var/lib/postgresql/data/backup_$(date +%Y%m%d).dump
+```
+
+### Restore
+```bash
+docker exec -t velogo-postgres pg_restore -U velogo_user -d velogodb -v /var/lib/postgresql/data/backup_20261023.dump
+```
+
+---
+
+## 16. REST API & Swagger Documentation
+
+When running locally, explore interactive API documentation:
+- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
+- **OpenAPI 3 JSON**: `http://localhost:8080/v3/api-docs`
 
 ---
 
 ## License
-MIT License. Created as an original mobility engineering project.
+MIT License. Created as an original mobility engineering platform.

@@ -1,6 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Crosshair, Loader2 } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
+import { Crosshair, Loader2, Layers } from 'lucide-react';
+
+// Fix Leaflet default icon paths in bundler environments
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 
 interface MapViewerProps {
   pickup?: { lat: number; lng: number; address?: string };
@@ -26,11 +35,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   selectionMode,
   onLocateUser,
   isLocating = false,
-  className = 'h-[400px] w-full rounded-2xl overflow-hidden shadow-inner border border-slate-200',
+  className = 'h-[480px] w-full rounded-2xl overflow-hidden shadow-inner border border-slate-200',
   zoom = 14,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [mapTheme, setMapTheme] = useState<'voyager' | 'light'>('voyager');
+
   const markersRef = useRef<{
     currentLoc?: L.Marker;
     currentLocCircle?: L.CircleMarker;
@@ -92,20 +104,32 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    // Use current location or pickup or fallback to default center
-    const initialLat = currentLocation?.lat || pickup?.lat || 20.5937;
-    const initialLng = currentLocation?.lng || pickup?.lng || 78.9629;
-    const initialZoom = (currentLocation || pickup) ? zoom : 5;
+    // React 18/19 StrictMode cleanup protection
+    if ((mapContainerRef.current as any)._leaflet_id) {
+      delete (mapContainerRef.current as any)._leaflet_id;
+    }
+
+    // Default to Bengaluru (platform seed service area) or detected location
+    const initialLat = currentLocation?.lat || pickup?.lat || 12.9716;
+    const initialLng = currentLocation?.lng || pickup?.lng || 77.5946;
+    const initialZoom = (currentLocation || pickup) ? zoom : 13;
 
     const map = L.map(mapContainerRef.current, {
       zoomControl: true,
       attributionControl: true,
     }).setView([initialLat, initialLng], initialZoom);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors | VeloGo',
-      maxZoom: 19,
-    }).addTo(map);
+    // Reliable CartoDB Voyager tiles (fast, high-DPI, unblocked)
+    const voyagerLayer = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      }
+    ).addTo(map);
+
+    tileLayerRef.current = voyagerLayer;
 
     map.on('click', (e) => {
       if (onMapClick) {
@@ -115,6 +139,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     mapInstanceRef.current = map;
 
+    // Invalidate size immediately and after layout rendering
+    const t1 = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+    const t2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 500);
+
     // Resize observer to ensure tiles never render blank on responsive resizing
     const resizeObserver = new ResizeObserver(() => {
       map.invalidateSize();
@@ -122,11 +154,42 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     resizeObserver.observe(mapContainerRef.current);
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       resizeObserver.disconnect();
-      map.remove();
-      mapInstanceRef.current = null;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
+        delete (mapContainerRef.current as any)._leaflet_id;
+      }
+      markersRef.current = {};
     };
   }, []);
+
+  // Handle Map Theme Toggle (Voyager vs Positron Light)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const tileUrl =
+      mapTheme === 'voyager'
+        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+    const newLayer = L.tileLayer(tileUrl, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20,
+    }).addTo(map);
+
+    tileLayerRef.current = newLayer;
+  }, [mapTheme]);
 
   // Update Markers and Polyline
   useEffect(() => {
@@ -195,13 +258,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     // 5. Draw Road Route Line
     if (pickup?.lat && pickup?.lng && destination?.lat && destination?.lng) {
-      // Use real road geometry if available, else 2-point fallback
-      const pts: [number, number][] = (routeGeometry && routeGeometry.length > 0)
-        ? routeGeometry
-        : [
-            [pickup.lat, pickup.lng],
-            [destination.lat, destination.lng],
-          ];
+      const pts: [number, number][] =
+        routeGeometry && routeGeometry.length > 0
+          ? routeGeometry
+          : [
+              [pickup.lat, pickup.lng],
+              [destination.lat, destination.lng],
+            ];
 
       if (markersRef.current.routeLine) {
         markersRef.current.routeLine.setLatLngs(pts);
@@ -220,12 +283,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         bounds.extend([captainLocation.lat, captainLocation.lng]);
       }
       map.fitBounds(bounds, { padding: [55, 55], maxZoom: 16 });
+      map.invalidateSize();
     } else {
       if (markersRef.current.routeLine) {
         map.removeLayer(markersRef.current.routeLine);
         delete markersRef.current.routeLine;
       }
-      // If only pickup is available, smoothly pan to it
       if (pickup?.lat && pickup?.lng) {
         map.panTo([pickup.lat, pickup.lng]);
         if (map.getZoom() < 13) {
@@ -241,8 +304,40 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   }, [pickup, destination, captainLocation, currentLocation, routeGeometry]);
 
   return (
-    <div className="relative w-full h-full">
-      <div ref={mapContainerRef} className={className} />
+    <div className="relative w-full h-full min-h-[420px]">
+      <div
+        ref={mapContainerRef}
+        className={`w-full h-full min-h-[420px] rounded-2xl overflow-hidden ${className || ''}`}
+        style={{ minHeight: '420px', width: '100%', height: '100%', zIndex: 1 }}
+      />
+
+      {/* Map Theme Toggle Button */}
+      <div className="absolute top-4 right-4 z-[400] bg-white/95 backdrop-blur-md rounded-xl p-1 shadow-md border border-slate-200 flex items-center gap-1 text-xs font-bold">
+        <button
+          type="button"
+          onClick={() => setMapTheme('voyager')}
+          className={`px-2.5 py-1 rounded-lg transition-colors ${
+            mapTheme === 'voyager'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+          title="Vibrant Street Map"
+        >
+          Street
+        </button>
+        <button
+          type="button"
+          onClick={() => setMapTheme('light')}
+          className={`px-2.5 py-1 rounded-lg transition-colors ${
+            mapTheme === 'light'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+          title="Minimal Light Map"
+        >
+          Clean
+        </button>
+      </div>
 
       {/* Floating Mode Tooltip */}
       {selectionMode && (
