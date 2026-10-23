@@ -43,6 +43,12 @@ public class User {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
+    @Column(length = 100)
+    private String department;
+
+    @Column(name = "job_title", length = 100)
+    private String jobTitle;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

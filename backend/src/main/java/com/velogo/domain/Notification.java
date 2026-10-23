@@ -38,6 +38,9 @@ public class Notification {
     @Builder.Default
     private boolean read = false;
 
+    @Column(name = "link_url")
+    private String linkUrl;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
