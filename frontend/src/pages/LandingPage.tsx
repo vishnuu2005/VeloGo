@@ -15,8 +15,8 @@ import {
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [pickup, setPickup] = useState('MG Road Metro Station, Bengaluru');
-  const [destination, setDestination] = useState('Koramangala 5th Block, Bengaluru');
+  const [pickup, setPickup] = useState('');
+  const [destination, setDestination] = useState('');
 
   const handleQuickBook = (e: React.FormEvent) => {
     e.preventDefault();
