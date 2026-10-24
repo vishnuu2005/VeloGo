@@ -170,9 +170,8 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
                 key={item.placeId || idx}
                 type="button"
                 onClick={() => handleSelect(item)}
-                className={`w-full text-left p-3 hover:bg-amber-50/70 transition-colors flex items-start gap-3 ${
-                  selectedIndex === idx ? 'bg-amber-50' : ''
-                }`}
+                className={`w-full text-left p-3 hover:bg-amber-50/70 transition-colors flex items-start gap-3 ${selectedIndex === idx ? 'bg-amber-50' : ''
+                  }`}
               >
                 <div className="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <MapPin className="w-4 h-4 text-brand-600" />

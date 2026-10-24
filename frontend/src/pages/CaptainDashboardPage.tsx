@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { api } from '../services/api';
 import { CaptainSummary, Ride } from '../types';
+import { MapViewer } from '../components/MapViewer';
 import {
   Bike,
   Car,
@@ -335,6 +336,30 @@ export const CaptainDashboardPage: React.FC = () => {
               <span>Distance: {activeRide.distanceKm} km</span>
               <span>Estimated: ~{activeRide.durationMinutes} mins</span>
             </div>
+          </div>
+
+          {/* Active Trip Interactive Map */}
+          <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 p-2">
+            <MapViewer
+              pickup={{
+                lat: activeRide.pickupLat,
+                lng: activeRide.pickupLng,
+                address: activeRide.pickupAddress,
+              }}
+              destination={{
+                lat: activeRide.destLat,
+                lng: activeRide.destLng,
+                address: activeRide.destAddress,
+              }}
+              captainLocation={
+                lastCoords
+                  ? lastCoords
+                  : activeRide.captainCurrentLat && activeRide.captainCurrentLng
+                  ? { lat: activeRide.captainCurrentLat, lng: activeRide.captainCurrentLng }
+                  : undefined
+              }
+              className="h-[320px] w-full rounded-xl"
+            />
           </div>
 
           {/* Action buttons matching lifecycle */}
