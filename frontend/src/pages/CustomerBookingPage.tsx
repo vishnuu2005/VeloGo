@@ -317,7 +317,7 @@ export const CustomerBookingPage: React.FC = () => {
             </div>
           )}
 
-          <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200">
+          <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200 min-h-[500px]">
             <MapViewer
               pickup={pickup.lat ? pickup : undefined}
               destination={destination.lat ? destination : undefined}
