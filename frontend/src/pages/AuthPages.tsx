@@ -101,37 +101,35 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Development Quick-Fill Drawer (Development only) */}
-        {import.meta.env.DEV && (
-          <details className="pt-2 border-t border-slate-100 text-center group">
-            <summary className="text-[11px] font-bold text-slate-400 hover:text-slate-600 uppercase cursor-pointer select-none">
-              Development Quick-Fill
-            </summary>
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('customer@velogo.com', 'password123')}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-brand-100 text-slate-800 text-[11px] font-bold text-center transition-colors"
-              >
-                Passenger
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('captain.rahul@velogo.com', 'password123')}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-brand-100 text-slate-800 text-[11px] font-bold text-center transition-colors"
-              >
-                Captain
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('admin@velogo.com', 'password123')}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-brand-100 text-slate-800 text-[11px] font-bold text-center transition-colors"
-              >
-                Admin
-              </button>
-            </div>
-          </details>
-        )}
+        {/* 1-Click Demo Profiles */}
+        <div className="pt-4 border-t border-slate-100 space-y-2">
+          <p className="text-[11px] font-bold text-slate-400 uppercase text-center">
+            One-Click Test Accounts
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => handleQuickDemoLogin('customer@velogo.com', 'password123')}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-brand-100 text-slate-800 text-[11px] font-bold text-center transition-colors"
+            >
+              Passenger
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemoLogin('captain.rahul@velogo.com', 'password123')}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-brand-100 text-slate-800 text-[11px] font-bold text-center transition-colors"
+            >
+              Captain
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemoLogin('admin@velogo.com', 'password123')}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-brand-100 text-slate-800 text-[11px] font-bold text-center transition-colors"
+            >
+              Admin
+            </button>
+          </div>
+        </div>
 
         <p className="text-center text-xs text-slate-500">
           New to VeloGo?{' '}

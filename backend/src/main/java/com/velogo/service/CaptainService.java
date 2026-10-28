@@ -2,6 +2,8 @@ package com.velogo.service;
 
 import com.velogo.domain.CaptainProfile;
 import com.velogo.domain.Ride;
+import com.velogo.domain.enums.NotificationType;
+import com.velogo.domain.enums.VehicleCategory;
 import com.velogo.domain.enums.VerificationStatus;
 import com.velogo.dto.AuthDtos;
 import com.velogo.dto.CaptainDtos;
@@ -29,6 +31,7 @@ public class CaptainService {
     private final CaptainProfileRepository captainRepository;
     private final RideRepository rideRepository;
     private final RideEventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
     @Transactional
     public void updateLocation(String captainUserId, CaptainDtos.UpdateLocationRequest req) {
@@ -77,6 +80,34 @@ public class CaptainService {
         return toCaptainSummaryDto(saved);
     }
 
+    @Transactional
+    public AuthDtos.CaptainSummaryDto applyForWomenOnly(String captainUserId, CaptainDtos.ApplyWomenOnlyRequest req) {
+        if (!Boolean.TRUE.equals(req.demoDeclarationAcknowledged())) {
+            throw new BadRequestException("You must acknowledge the demo self-declaration terms.");
+        }
+
+        CaptainProfile captain = captainRepository.findByUserId(captainUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Captain profile not found for user: " + captainUserId));
+
+        if (captain.getVehicle() == null || captain.getVehicle().getCategory() != VehicleCategory.BIKE) {
+            throw new BadRequestException("Only two-wheeler / bike captains can apply for the Women-Only Bike program.");
+        }
+
+        captain.setWomenOnlyStatus("APPLIED");
+        captain.setWomenOnlyEligible(false); // submission does not automatically grant eligibility
+        captain.setWomenOnlyDeclarationDate(LocalDateTime.now());
+        CaptainProfile saved = captainRepository.save(captain);
+
+        notificationService.sendNotification(
+                captainUserId,
+                "Women-Only Bike Program Application Received",
+                "Your application has been submitted for admin verification. Note: This is a demo self-declaration workflow.",
+                NotificationType.VERIFICATION
+        );
+
+        return toCaptainSummaryDto(saved);
+    }
+
     @Transactional(readOnly = true)
     public AuthDtos.CaptainSummaryDto getProfile(String captainUserId) {
         CaptainProfile captain = captainRepository.findByUserId(captainUserId)
@@ -102,6 +133,8 @@ public class CaptainService {
                 cp.getRejectionReason(),
                 cp.isOnline(),
                 cp.isAvailable(),
+                cp.isWomenOnlyEligible(),
+                cp.getWomenOnlyStatus(),
                 cp.getCurrentLatitude(),
                 cp.getCurrentLongitude(),
                 cp.getRatingAvg(),

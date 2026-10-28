@@ -63,11 +63,12 @@ public class RideService {
             List<MatchingService.CandidateCaptain> nearby = matchingService.findNearbyCaptains(cat, req.pickupLat(), req.pickupLng());
             boolean available = !nearby.isEmpty();
 
-            String etaText = available ? (int) Math.max(2, Math.round(nearby.get(0).distanceKm() * 3)) + " mins away" : "3-5 mins away";
+            String etaText = available ? (int) Math.max(2, Math.round(nearby.get(0).distanceKm() * 3)) + " mins away" : "No Captains";
             String catName = switch (cat) {
                 case BIKE -> "VeloGo Bike";
                 case AUTO -> "VeloGo Auto";
                 case CAB -> "VeloGo Prime Cab";
+                case WOMEN_BIKE -> "Women-Only Bike";
             };
 
             estimates.add(new RideDtos.CategoryEstimateDto(
@@ -83,7 +84,7 @@ public class RideService {
                     breakdown.taxAmount(),
                     breakdown.discountAmount(),
                     breakdown.totalFare(),
-                    true
+                    available
             ));
         }
 
@@ -103,6 +104,47 @@ public class RideService {
             throw new BadRequestException("You already have an active ride in progress. Ride ID: " + activeRides.get(0).getId());
         }
 
+        // Validate Women-Only Bike passenger eligibility & demo self-declaration
+        boolean isForSomeoneElse = Boolean.TRUE.equals(req.isForSomeoneElse());
+        String travelerName = isForSomeoneElse && req.travelerName() != null ? req.travelerName().trim() : customer.getFullName();
+        String travelerPhone = isForSomeoneElse && req.travelerPhone() != null ? req.travelerPhone().trim() : customer.getPhone();
+        String travelerRelationship = isForSomeoneElse && req.travelerRelationship() != null ? req.travelerRelationship().trim() : "Self";
+        String travelerGender = isForSomeoneElse && req.travelerGender() != null
+                ? req.travelerGender().trim().toUpperCase()
+                : (customer.getGender() != null && !customer.getGender().isBlank() ? customer.getGender().trim().toUpperCase() : "UNSPECIFIED");
+
+        if (req.vehicleCategory() == VehicleCategory.WOMEN_BIKE) {
+            if (!Boolean.TRUE.equals(req.passengerDeclarationAcknowledged())) {
+                throw new BadRequestException("Demo self-declaration must be acknowledged for Women-Only Bike bookings.");
+            }
+
+            if (isForSomeoneElse) {
+                if (req.travelerName() == null || req.travelerName().trim().isBlank()) {
+                    throw new BadRequestException("Traveler name is required when booking for someone else.");
+                }
+                if (req.travelerPhone() == null || req.travelerPhone().trim().isBlank()) {
+                    throw new BadRequestException("Traveler phone number is required when booking for someone else.");
+                }
+                if (req.travelerRelationship() == null || req.travelerRelationship().trim().isBlank()) {
+                    throw new BadRequestException("Traveler relationship is required (e.g., Wife, Mother, Sister, Friend).");
+                }
+                if (req.travelerGender() == null || !req.travelerGender().trim().equalsIgnoreCase("FEMALE")) {
+                    throw new BadRequestException("Women-Only Bike bookings are reserved exclusively for women passengers. The designated traveler must be female. Please choose standard Bike, Auto, or Cab, or update traveler details.");
+                }
+                travelerGender = "FEMALE";
+            } else {
+                // Booking for self
+                String declaredGender = (req.travelerGender() != null && !req.travelerGender().isBlank())
+                        ? req.travelerGender().trim().toUpperCase()
+                        : (customer.getGender() != null ? customer.getGender().trim().toUpperCase() : "UNSPECIFIED");
+
+                if (!"FEMALE".equals(declaredGender)) {
+                    throw new BadRequestException("Women-Only Bike bookings are reserved exclusively for women passengers. If you are booking for a female relative or friend, please select 'Book for Someone Else' and enter their details.");
+                }
+                travelerGender = "FEMALE";
+            }
+        }
+
         RoutingService.RouteInfo route = routingService.getRoute(
                 req.pickupLat(), req.pickupLng(),
                 req.destLat(), req.destLng()
@@ -111,6 +153,16 @@ public class RideService {
         FareCalculationService.FareBreakdown fare = fareCalculationService.calculateFare(
                 req.vehicleCategory(), route.distanceKm(), route.durationMinutes(), req.couponCode()
         );
+
+        // Find candidate captains
+        List<MatchingService.CandidateCaptain> nearbyCaptains = matchingService.findNearbyCaptains(
+                req.vehicleCategory(), req.pickupLat(), req.pickupLng()
+        );
+
+        // Strict availability guard for Women-Only: NEVER silently fall back
+        if (req.vehicleCategory() == VehicleCategory.WOMEN_BIKE && nearbyCaptains.isEmpty()) {
+            throw new BadRequestException("No verified Women-Only Bike captains are currently available in your pickup area. Please try again in a few moments or choose a standard ride category.");
+        }
 
         String otp = String.format("%04d", secureRandom.nextInt(10000));
 
@@ -133,6 +185,12 @@ public class RideService {
                 .taxAmount(fare.taxAmount())
                 .couponCode(fare.couponCode())
                 .otpCode(otp)
+                .isForSomeoneElse(isForSomeoneElse)
+                .travelerName(travelerName)
+                .travelerPhone(travelerPhone)
+                .travelerRelationship(travelerRelationship)
+                .travelerGender(travelerGender)
+                .passengerDeclarationAcknowledged(Boolean.TRUE.equals(req.passengerDeclarationAcknowledged()))
                 .build();
 
         Ride savedRide = rideRepository.save(ride);
@@ -162,10 +220,6 @@ public class RideService {
         );
 
         // Dispatch to candidate captains
-        List<MatchingService.CandidateCaptain> nearbyCaptains = matchingService.findNearbyCaptains(
-                req.vehicleCategory(), req.pickupLat(), req.pickupLng()
-        );
-
         if (!nearbyCaptains.isEmpty()) {
             for (MatchingService.CandidateCaptain candidate : nearbyCaptains) {
                 matchingService.dispatchRideToCaptain(savedRide, candidate.captain());
@@ -193,6 +247,13 @@ public class RideService {
 
         if (ride.getStatus() != RideStatus.SEARCHING && ride.getStatus() != RideStatus.REQUESTED) {
             throw new BadRequestException("This ride has already been accepted or is no longer available.");
+        }
+
+        // Women-Only authorization check
+        if (ride.getVehicleCategory() == VehicleCategory.WOMEN_BIKE) {
+            if (!captain.isWomenOnlyEligible() || !"APPROVED".equals(captain.getWomenOnlyStatus())) {
+                throw new BadRequestException("This is a Women-Only Bike booking. Only admin-approved Women-Only captains can accept this ride.");
+            }
         }
 
         // Assign captain and transition to ACCEPTED
@@ -369,9 +430,6 @@ public class RideService {
         Ride ride = rideRepository.findById(rideId)
                 .orElseThrow(() -> new ResourceNotFoundException("Ride not found with id: " + rideId));
 
-        boolean isCustomer = ride.getCustomer().getId().equals(userId);
-        boolean isCaptain = ride.getCaptain() != null && ride.getCaptain().getUser().getId().equals(userId);
-
         // Also allow admin to view any ride
         return toRideDto(ride);
     }
@@ -496,6 +554,12 @@ public class RideService {
                 captainCurrentLng,
                 r.getCancellationReason(),
                 r.getCancelledBy(),
+                r.isForSomeoneElse(),
+                r.getTravelerName(),
+                r.getTravelerPhone(),
+                r.getTravelerRelationship(),
+                r.getTravelerGender(),
+                r.isPassengerDeclarationAcknowledged(),
                 r.getCreatedAt() != null ? r.getCreatedAt().format(dtf) : null,
                 r.getAcceptedAt() != null ? r.getAcceptedAt().format(dtf) : null,
                 r.getStartedAt() != null ? r.getStartedAt().format(dtf) : null,

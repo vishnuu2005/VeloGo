@@ -21,6 +21,11 @@ public class CaptainDtos {
             String otpCode
     ) {}
 
+    public record ApplyWomenOnlyRequest(
+            @NotNull(message = "Demo declaration must be confirmed")
+            Boolean demoDeclarationAcknowledged
+    ) {}
+
     public record IncomingRideDispatchDto(
             String dispatchId,
             String rideId,
@@ -36,6 +41,9 @@ public class CaptainDtos {
             BigDecimal estimatedFare,
             int countdownSeconds,
             String customerName,
-            BigDecimal customerRating
+            BigDecimal customerRating,
+            Boolean isForSomeoneElse,
+            String travelerName,
+            String travelerRelationship
     ) {}
 }

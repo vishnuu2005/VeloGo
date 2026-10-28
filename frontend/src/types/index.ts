@@ -1,6 +1,6 @@
 export type Role = 'ROLE_CUSTOMER' | 'ROLE_CAPTAIN' | 'ROLE_ADMIN';
 
-export type VehicleCategory = 'BIKE' | 'AUTO' | 'CAB';
+export type VehicleCategory = 'BIKE' | 'AUTO' | 'CAB' | 'WOMEN_BIKE';
 
 export type RideStatus =
   | 'REQUESTED'
@@ -33,6 +33,9 @@ export interface CaptainSummary {
   rejectionReason?: string;
   online: boolean;
   available: boolean;
+  womenOnlyEligible?: boolean;
+  womenOnlyStatus?: 'NOT_APPLIED' | 'APPLIED' | 'APPROVED' | 'REJECTED';
+  womenOnlyRejectionReason?: string;
   currentLatitude?: number;
   currentLongitude?: number;
   ratingAvg: number;
@@ -48,6 +51,7 @@ export interface User {
   fullName: string;
   role: Role;
   active: boolean;
+  gender?: string;
   avatarUrl?: string;
   captainProfile?: CaptainSummary;
 }
@@ -145,6 +149,12 @@ export interface Ride {
   captainCurrentLng?: number;
   cancellationReason?: string;
   cancelledBy?: string;
+  isForSomeoneElse?: boolean;
+  travelerName?: string;
+  travelerPhone?: string;
+  travelerRelationship?: string;
+  travelerGender?: string;
+  passengerDeclarationAcknowledged?: boolean;
   createdAt: string;
   acceptedAt?: string;
   startedAt?: string;
@@ -176,6 +186,29 @@ export interface PaymentReceipt {
   status: PaymentStatus;
   transactionRef: string;
   date: string;
+}
+
+export interface CaptainAdmin {
+  id: string;
+  user?: {
+    id: string;
+    fullName: string;
+    email: string;
+    phone: string;
+  };
+  vehicle?: Vehicle;
+  drivingLicenseNumber: string;
+  verificationStatus: VerificationStatus;
+  rejectionReason?: string;
+  online: boolean;
+  available: boolean;
+  womenOnlyEligible: boolean;
+  womenOnlyStatus: string;
+  womenOnlyRejectionReason?: string;
+  ratingAvg: number;
+  totalRides: number;
+  totalEarnings: number;
+  createdAt?: string;
 }
 
 export interface AdminOverview {

@@ -40,6 +40,11 @@ public class AdminDtos {
             String reason
     ) {}
 
+    public record VerifyWomenOnlyActionRequest(
+            @NotBlank String status,
+            String reason
+    ) {}
+
     public record UpdateFareConfigRequest(
             @NotNull BigDecimal baseFare,
             @NotNull BigDecimal minFare,
@@ -89,6 +94,9 @@ public class AdminDtos {
             String rejectionReason,
             boolean online,
             boolean available,
+            boolean womenOnlyEligible,
+            String womenOnlyStatus,
+            String womenOnlyRejectionReason,
             BigDecimal ratingAvg,
             long totalRides,
             BigDecimal totalEarnings,

@@ -44,7 +44,9 @@ public class MatchingService {
             BigDecimal pickupLat,
             BigDecimal pickupLng
     ) {
-        List<CaptainProfile> eligibleCaptains = captainRepository.findAvailableCaptainsByCategory(category);
+        List<CaptainProfile> eligibleCaptains = (category == VehicleCategory.WOMEN_BIKE)
+                ? captainRepository.findAvailableCaptainsForWomenOnly()
+                : captainRepository.findAvailableCaptainsByCategory(category);
 
         return eligibleCaptains.stream()
                 .filter(c -> c.getCurrentLatitude() != null && c.getCurrentLongitude() != null)
@@ -66,6 +68,10 @@ public class MatchingService {
             return false;
         }
 
+        String displayName = (ride.isForSomeoneElse() && ride.getTravelerName() != null && !ride.getTravelerName().isBlank())
+                ? ride.getTravelerName() + " (" + (ride.getTravelerRelationship() != null ? ride.getTravelerRelationship() : "Traveler") + ")"
+                : ride.getCustomer().getFullName();
+
         CaptainDtos.IncomingRideDispatchDto dispatchDto = new CaptainDtos.IncomingRideDispatchDto(
                 UUID.randomUUID().toString(),
                 ride.getId(),
@@ -80,8 +86,11 @@ public class MatchingService {
                 ride.getDurationMinutes(),
                 ride.getEstimatedFare(),
                 requestTimeoutSeconds,
-                ride.getCustomer().getFullName(),
-                new BigDecimal("4.90")
+                displayName,
+                new BigDecimal("4.90"),
+                ride.isForSomeoneElse(),
+                ride.getTravelerName(),
+                ride.getTravelerRelationship()
         );
 
         eventPublisher.publishCaptainDispatch(captain.getId(), dispatchDto);

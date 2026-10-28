@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CategoryEstimate, VehicleCategory } from '../types';
-import { Bike, Car, ChevronDown, ChevronUp, Clock, Info, ShieldCheck } from 'lucide-react';
+import { Bike, Car, ChevronDown, ChevronUp, Clock, ShieldCheck } from 'lucide-react';
 
 interface FareCardProps {
   estimate: CategoryEstimate;
@@ -23,28 +23,47 @@ export const FareCard: React.FC<FareCardProps> = ({ estimate, isSelected, onSele
         );
       case 'CAB':
         return <Car className="w-6 h-6 text-emerald-600" />;
+      case 'WOMEN_BIKE':
+        return (
+          <div className="w-6 h-6 flex items-center justify-center font-black text-purple-700 bg-purple-100 rounded">
+            <ShieldCheck className="w-5 h-5 text-purple-600" />
+          </div>
+        );
     }
   };
+
+  const isWomenBike = estimate.category === 'WOMEN_BIKE';
 
   return (
     <div
       onClick={onSelect}
       className={`relative cursor-pointer transition-all duration-200 rounded-2xl border-2 p-4 ${
         isSelected
-          ? 'border-brand-500 bg-brand-50/40 shadow-glow'
+          ? isWomenBike
+            ? 'border-purple-500 bg-purple-50/40 shadow-glow'
+            : 'border-brand-500 bg-brand-50/40 shadow-glow'
           : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
       }`}
     >
       <div className="flex items-center justify-between">
         {/* Left: Icon & Category name */}
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isWomenBike ? 'bg-purple-50' : 'bg-slate-100'}`}>
             {getCategoryIcon(estimate.category)}
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h4 className="font-bold text-slate-900 text-base">{estimate.categoryName}</h4>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+              {isWomenBike && (
+                <span className="text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                  <ShieldCheck className="w-3 h-3" /> Women-Only
+                </span>
+              )}
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-0.5 ${
+                estimate.isAvailable
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-100 text-slate-500'
+              }`}>
                 <Clock className="w-3 h-3" /> {estimate.etaText}
               </span>
             </div>

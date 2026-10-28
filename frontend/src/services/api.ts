@@ -1,36 +1,36 @@
-import {
+﻿import {
   AuthResponse,
   CategoryEstimate,
+  CaptainSummary,
+  Coupon,
+  FareConfiguration,
   FareEstimateResponse,
+  GeoReverseResult,
+  GeoSearchResult,
+  PaymentMethod,
   PaymentReceipt,
   Ride,
-  User,
-  CaptainSummary,
-  AdminOverview,
   SupportTicket,
-  FareConfiguration,
-  Coupon,
+  User,
   VehicleCategory,
-  PaymentMethod,
   VerificationStatus,
-  GeoSearchResult,
-  GeoReverseResult,
+  AdminOverview,
 } from '../types';
 
 const API_BASE = '/api/v1';
 
-function getAuthHeader(): Record<string, string> {
-  const token = localStorage.getItem('velogo_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('velogo_token');
+
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
-    ...getAuthHeader(),
     ...((options.headers as Record<string, string>) || {}),
   };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -39,7 +39,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const contentType = response.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
-
   if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh')) {
     const refreshToken = localStorage.getItem('velogo_refresh_token');
     if (refreshToken) {
@@ -50,7 +49,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
           body: JSON.stringify({ refreshToken }),
         });
         if (refreshRes.ok) {
-          const authData = (await refreshRes.json()) as AuthResponse;
+          const authData: AuthResponse = await refreshRes.json();
           localStorage.setItem('velogo_token', authData.accessToken);
           // Retry original request
           const retryHeaders: Record<string, string> = {
@@ -131,6 +130,7 @@ export const api = {
       password: string;
       emergencyContactName?: string;
       emergencyContactPhone?: string;
+      gender?: string;
     }) =>
       request<AuthResponse>('/auth/register', {
         method: 'POST',
@@ -187,6 +187,12 @@ export const api = {
       vehicleCategory: VehicleCategory;
       paymentMethod: PaymentMethod;
       couponCode?: string;
+      isForSomeoneElse?: boolean;
+      travelerName?: string;
+      travelerPhone?: string;
+      travelerRelationship?: string;
+      travelerGender?: string;
+      passengerDeclarationAcknowledged?: boolean;
     }) =>
       request<Ride>('/rides', {
         method: 'POST',
@@ -211,6 +217,12 @@ export const api = {
       request<CaptainSummary>('/captains/availability', {
         method: 'PATCH',
         body: JSON.stringify({ online }),
+      }),
+
+    applyWomenOnly: (demoDeclarationAcknowledged: boolean) =>
+      request<CaptainSummary>('/captains/women-only/apply', {
+        method: 'POST',
+        body: JSON.stringify({ demoDeclarationAcknowledged }),
       }),
 
     updateLocation: (lat: number, lng: number, heading?: number) =>
@@ -307,6 +319,12 @@ export const api = {
 
     verifyCaptain: (captainId: string, status: VerificationStatus, reason?: string) =>
       request<any>(`/admin/captains/${captainId}/verification`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason }),
+      }),
+
+    verifyWomenOnlyCaptain: (captainId: string, status: 'APPROVED' | 'REJECTED', reason?: string) =>
+      request<any>(`/admin/captains/${captainId}/women-only`, {
         method: 'PATCH',
         body: JSON.stringify({ status, reason }),
       }),

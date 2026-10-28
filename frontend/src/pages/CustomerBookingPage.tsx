@@ -12,8 +12,8 @@ import {
 import { MapViewer } from '../components/MapViewer';
 import { FareCard } from '../components/FareCard';
 import { RideStatusModal } from '../components/RideStatusModal';
-import { AddressAutocomplete } from '../components/AddressAutocomplete';
 import {
+  MapPin,
   Tag,
   CreditCard,
   Banknote,
@@ -21,10 +21,23 @@ import {
   Crosshair,
   AlertCircle,
   RefreshCw,
-  Navigation,
-  CheckCircle2,
-  MapPin,
+  Users,
+  UserCheck,
+  ShieldCheck,
+  Info,
 } from 'lucide-react';
+
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
+
+const PRESET_LOCATIONS = [
+  { name: 'MG Road Metro Station', lat: 12.9756, lng: 77.6066 },
+  { name: 'Koramangala 5th Block', lat: 12.9352, lng: 77.6245 },
+  { name: 'Indiranagar 100ft Road', lat: 12.9785, lng: 77.6408 },
+  { name: 'Majestic Bus Terminal', lat: 12.9784, lng: 77.5726 },
+  { name: 'Electronic City Phase 1', lat: 12.8452, lng: 77.6602 },
+  { name: 'Whitefield ITPL', lat: 12.9866, lng: 77.7381 },
+  { name: 'Kempegowda Airport', lat: 13.1986, lng: 77.7066 },
+];
 
 export const CustomerBookingPage: React.FC = () => {
   const { user } = useAuth();
@@ -32,21 +45,16 @@ export const CustomerBookingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // User detected device location
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
-  const [isLocating, setIsLocating] = useState(false);
-  const [geoNotice, setGeoNotice] = useState<{ type: 'info' | 'success' | 'warn'; message: string } | null>(null);
-
-  // Pickup and Destination
-  const [pickup, setPickup] = useState<{ address: string; lat: number; lng: number }>({
-    address: '',
-    lat: 0,
-    lng: 0,
+  // Coordinates & addresses
+  const [pickup, setPickup] = useState({
+    address: 'MG Road Metro Station, Bengaluru',
+    lat: 12.9756,
+    lng: 77.6066,
   });
-  const [destination, setDestination] = useState<{ address: string; lat: number; lng: number }>({
-    address: '',
-    lat: 0,
-    lng: 0,
+  const [destination, setDestination] = useState({
+    address: 'Koramangala 5th Block, Bengaluru',
+    lat: 12.9352,
+    lng: 77.6245,
   });
 
   const [selectionMode, setSelectionMode] = useState<'pickup' | 'destination' | null>(null);
@@ -56,6 +64,14 @@ export const CustomerBookingPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<VehicleCategory>('BIKE');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('RAZORPAY');
 
+  // Women-Only Traveler State
+  const [isForSomeoneElse, setIsForSomeoneElse] = useState(false);
+  const [travelerName, setTravelerName] = useState('');
+  const [travelerPhone, setTravelerPhone] = useState('');
+  const [travelerRelationship, setTravelerRelationship] = useState('Sister');
+  const [travelerGender, setTravelerGender] = useState<'FEMALE' | 'MALE' | 'OTHER'>('FEMALE');
+  const [passengerDeclarationConfirmed, setPassengerDeclarationConfirmed] = useState(true);
+
   // Coupon
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
@@ -63,89 +79,68 @@ export const CustomerBookingPage: React.FC = () => {
   // Active ride state
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [captainLocation, setCaptainLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Geolocation trigger function
-  const handleGetLocation = (isInitial = false) => {
-    if (!navigator.geolocation) {
-      if (!isInitial) {
-        setGeoNotice({ type: 'warn', message: 'Geolocation is not supported by your browser.' });
-      }
-      return;
-    }
-
-    setIsLocating(true);
-    if (!isInitial) {
-      setGeoNotice({ type: 'info', message: 'Accessing GPS device location...' });
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setCurrentLocation({ lat, lng });
-
-        try {
-          const rev = await api.geo.reverse(lat, lng);
-          const addr = rev.displayName || `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          setPickup({ address: addr, lat, lng });
-          setGeoNotice({ type: 'success', message: `Pickup set to your current location: ${addr}` });
-        } catch {
-          const fallback = `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          setPickup({ address: fallback, lat, lng });
-          setGeoNotice({ type: 'success', message: 'Current location coordinates detected.' });
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (err) => {
-        setIsLocating(false);
-        console.warn('Geolocation error:', err.message);
-        if (!isInitial) {
-          setGeoNotice({
-            type: 'warn',
-            message: 'Location access denied or unavailable. Please search for your pickup address or tap on the map.',
-          });
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-    );
-  };
-
-  // 1. Initial Geolocation on load
-  useEffect(() => {
-    handleGetLocation(true);
-  }, []);
-
-  // 2. Parse query params if redirected from landing page
+  // Parse query params if redirected from landing page & auto-geocode if coordinates missing
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const pAddr = params.get('pickup');
     const dAddr = params.get('dest');
-    if (pAddr) {
-      api.geo.search(pAddr).then((res) => {
-        if (res && res.length > 0) {
-          setPickup({ address: res[0].displayName, lat: res[0].latitude, lng: res[0].longitude });
-        } else {
-          setPickup((prev) => ({ ...prev, address: pAddr }));
-        }
+    const pLat = params.get('pLat');
+    const pLng = params.get('pLng');
+    const dLat = params.get('dLat');
+    const dLng = params.get('dLng');
+    const cat = params.get('cat') as VehicleCategory | null;
+
+    if (pLat && pLng) {
+      setPickup({
+        address: pAddr || 'Pickup Point',
+        lat: parseFloat(pLat),
+        lng: parseFloat(pLng),
       });
+    } else if (pAddr) {
+      setPickup((prev) => ({ ...prev, address: pAddr }));
+      api.geo.search(pAddr).then((results) => {
+        if (results && results.length > 0) {
+          setPickup({
+            address: results[0].displayName || pAddr,
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+          });
+        }
+      }).catch(() => {});
     }
-    if (dAddr) {
-      api.geo.search(dAddr).then((res) => {
-        if (res && res.length > 0) {
-          setDestination({ address: res[0].displayName, lat: res[0].latitude, lng: res[0].longitude });
-        } else {
-          setDestination((prev) => ({ ...prev, address: dAddr }));
-        }
+
+    if (dLat && dLng) {
+      setDestination({
+        address: dAddr || 'Destination Point',
+        lat: parseFloat(dLat),
+        lng: parseFloat(dLng),
       });
+    } else if (dAddr) {
+      setDestination((prev) => ({ ...prev, address: dAddr }));
+      api.geo.search(dAddr).then((results) => {
+        if (results && results.length > 0) {
+          setDestination({
+            address: results[0].displayName || dAddr,
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+          });
+        }
+      }).catch(() => {});
+    }
+
+    if (cat && ['BIKE', 'AUTO', 'CAB', 'WOMEN_BIKE'].includes(cat)) {
+      setSelectedCategory(cat);
     }
   }, [location.search]);
 
-  // 3. Check if customer already has active ride on load
+  // Check if customer already has active ride on load
   useEffect(() => {
     if (user) {
       api.customer
@@ -153,6 +148,20 @@ export const CustomerBookingPage: React.FC = () => {
         .then((ride) => {
           if (ride && ride.status !== 'CANCELLED') {
             setActiveRide(ride);
+            if (ride.pickupLat && ride.pickupLng) {
+              setPickup({
+                address: ride.pickupAddress,
+                lat: ride.pickupLat,
+                lng: ride.pickupLng,
+              });
+            }
+            if (ride.destLat && ride.destLng) {
+              setDestination({
+                address: ride.destAddress,
+                lat: ride.destLat,
+                lng: ride.destLng,
+              });
+            }
             if (ride.captainCurrentLat && ride.captainCurrentLng) {
               setCaptainLocation({
                 lat: ride.captainCurrentLat,
@@ -165,7 +174,7 @@ export const CustomerBookingPage: React.FC = () => {
     }
   }, [user]);
 
-  // 4. Subscribe to real-time WebSocket ride updates
+  // Subscribe to real-time WebSocket ride updates
   useEffect(() => {
     if (!activeRide) return;
 
@@ -192,32 +201,43 @@ export const CustomerBookingPage: React.FC = () => {
     };
   }, [activeRide?.id]);
 
-  // 5. Fetch Fare Estimates whenever coordinates or coupon change
+  // Fetch Fare Estimates whenever coordinates or coupon change
   const fetchEstimates = async () => {
-    if (!pickup.lat || !pickup.lng || !destination.lat || !destination.lng) return;
+    if (!pickup.lat || !destination.lat) return;
     setIsLoadingEstimate(true);
     setErrorMessage(null);
     try {
       const res = await api.rides.estimate({
         pickupLat: pickup.lat,
         pickupLng: pickup.lng,
-        pickupAddress: pickup.address || 'Pickup Point',
+        pickupAddress: pickup.address,
         destLat: destination.lat,
         destLng: destination.lng,
-        destAddress: destination.address || 'Destination',
+        destAddress: destination.address,
         couponCode: appliedCoupon || undefined,
       });
       setEstimates(res);
     } catch (err: any) {
       setErrorMessage(err.message || 'Could not calculate fare estimate');
-      setEstimates(null);
     } finally {
       setIsLoadingEstimate(false);
     }
   };
 
   useEffect(() => {
-    if (!activeRide && pickup.lat && destination.lat) {
+    if (activeRide) {
+      api.rides
+        .estimate({
+          pickupLat: activeRide.pickupLat,
+          pickupLng: activeRide.pickupLng,
+          pickupAddress: activeRide.pickupAddress,
+          destLat: activeRide.destLat,
+          destLng: activeRide.destLng,
+          destAddress: activeRide.destAddress,
+        })
+        .then(setEstimates)
+        .catch(() => {});
+    } else {
       fetchEstimates();
     }
   }, [pickup.lat, pickup.lng, destination.lat, destination.lng, appliedCoupon, activeRide]);
@@ -229,25 +249,72 @@ export const CustomerBookingPage: React.FC = () => {
     }
   };
 
-  const handleMapClick = async (lat: number, lng: number) => {
-    if (!selectionMode) return;
-
-    let address = `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+  // Called when user drags green pickup pin or clicks to set pickup on map
+  const handleMapPickupChange = async (loc: { lat: number; lng: number; address?: string }) => {
     try {
-      const rev = await api.geo.reverse(lat, lng);
-      if (rev && rev.displayName) {
-        address = rev.displayName;
-      }
-    } catch (e) {
-      console.warn('Reverse geocode error:', e);
-    }
-
-    if (selectionMode === 'pickup') {
-      setPickup({ lat, lng, address });
-    } else if (selectionMode === 'destination') {
-      setDestination({ lat, lng, address });
+      const rev = await api.geo.reverse(loc.lat, loc.lng);
+      setPickup({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: rev.displayName || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
+    } catch {
+      setPickup({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: loc.address || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
     }
     setSelectionMode(null);
+  };
+
+  // Called when user drags red destination pin or clicks to set destination on map
+  const handleMapDestChange = async (loc: { lat: number; lng: number; address?: string }) => {
+    try {
+      const rev = await api.geo.reverse(loc.lat, loc.lng);
+      setDestination({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: rev.displayName || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
+    } catch {
+      setDestination({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: loc.address || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
+    }
+    setSelectionMode(null);
+  };
+
+  const handleMapClick = async (lat: number, lng: number) => {
+    if (selectionMode === 'pickup') {
+      await handleMapPickupChange({ lat, lng });
+    } else if (selectionMode === 'destination') {
+      await handleMapDestChange({ lat, lng });
+    }
+  };
+
+  const handleLocateUser = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCurrentLocation({ lat, lng });
+        await handleMapPickupChange({ lat, lng });
+        setIsLocating(false);
+      },
+      (err) => {
+        console.warn('Geolocation lookup failed:', err);
+        setIsLocating(false);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
   };
 
   const handleBookRide = async () => {
@@ -256,9 +323,39 @@ export const CustomerBookingPage: React.FC = () => {
       return;
     }
 
-    if (!pickup.lat || !destination.lat) {
-      setErrorMessage('Please select both pickup and destination locations.');
-      return;
+    // Women-Only client-side eligibility validation
+    if (selectedCategory === 'WOMEN_BIKE') {
+      if (!passengerDeclarationConfirmed) {
+        setErrorMessage('Please confirm the demo self-declaration before requesting a Women-Only ride.');
+        return;
+      }
+
+      if (isForSomeoneElse) {
+        if (!travelerName.trim()) {
+          setErrorMessage('Traveler full name is required when booking for someone else.');
+          return;
+        }
+        if (!travelerPhone.trim()) {
+          setErrorMessage('Traveler phone number is required when booking for someone else.');
+          return;
+        }
+        if (travelerGender !== 'FEMALE') {
+          setErrorMessage('Women-Only Bike bookings are reserved exclusively for female passengers. Designated traveler must be female.');
+          return;
+        }
+      } else {
+        if (user.gender === 'MALE') {
+          setErrorMessage('Women-Only Bike bookings are reserved exclusively for women passengers. To book on behalf of a female traveler, please select "Someone Else".');
+          return;
+        }
+      }
+
+      // Check captain availability for Women-Only Bike
+      const womenEstimate = estimates?.estimates.find((e) => e.category === 'WOMEN_BIKE');
+      if (womenEstimate && !womenEstimate.isAvailable) {
+        setErrorMessage('No verified Women-Only Bike captains are currently available in your pickup area. Please retry shortly or select standard Bike, Auto, or Cab.');
+        return;
+      }
     }
 
     setIsBooking(true);
@@ -274,6 +371,12 @@ export const CustomerBookingPage: React.FC = () => {
         vehicleCategory: selectedCategory,
         paymentMethod,
         couponCode: appliedCoupon || undefined,
+        isForSomeoneElse,
+        travelerName: isForSomeoneElse ? travelerName.trim() : undefined,
+        travelerPhone: isForSomeoneElse ? travelerPhone.trim() : undefined,
+        travelerRelationship: isForSomeoneElse ? travelerRelationship : undefined,
+        travelerGender: isForSomeoneElse ? travelerGender : 'FEMALE',
+        passengerDeclarationAcknowledged: passengerDeclarationConfirmed,
       });
 
       setActiveRide(ride);
@@ -284,78 +387,83 @@ export const CustomerBookingPage: React.FC = () => {
     }
   };
 
+  const selectedCategoryEstimate = estimates?.estimates?.find((e) => e.category === selectedCategory);
+  const isSelectedCategoryUnavailable = selectedCategory === 'WOMEN_BIKE' && selectedCategoryEstimate && !selectedCategoryEstimate.isAvailable;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left: Map Viewer */}
         <div className="lg:col-span-7 order-2 lg:order-1 space-y-4">
-          {geoNotice && (
-            <div
-              className={`p-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between border shadow-sm transition-all ${
-                geoNotice.type === 'success'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : geoNotice.type === 'warn'
-                  ? 'bg-amber-50 text-amber-800 border-amber-200'
-                  : 'bg-blue-50 text-blue-800 border-blue-200'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {geoNotice.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                ) : (
-                  <Navigation className="w-4 h-4 text-brand-600 flex-shrink-0 animate-pulse" />
-                )}
-                <span>{geoNotice.message}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setGeoNotice(null)}
-                className="text-xs font-bold opacity-60 hover:opacity-100 ml-2"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200 min-h-[500px]">
+          <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200 relative overflow-hidden h-[540px] lg:h-[650px] min-h-[480px]">
             <MapViewer
-              pickup={pickup.lat ? pickup : undefined}
-              destination={destination.lat ? destination : undefined}
+              pickup={
+                activeRide
+                  ? {
+                      lat: activeRide.pickupLat,
+                      lng: activeRide.pickupLng,
+                      address: activeRide.pickupAddress,
+                    }
+                  : pickup
+              }
+              destination={
+                activeRide
+                  ? {
+                      lat: activeRide.destLat,
+                      lng: activeRide.destLng,
+                      address: activeRide.destAddress,
+                    }
+                  : destination
+              }
               captainLocation={captainLocation}
               currentLocation={currentLocation}
               routeGeometry={estimates?.routeGeometry}
-              selectionMode={selectionMode}
+              onPickupChange={handleMapPickupChange}
+              onDestinationChange={handleMapDestChange}
               onMapClick={handleMapClick}
-              onLocateUser={() => handleGetLocation(false)}
-              isLocating={isLocating}
-              className="h-[480px] lg:h-[620px] w-full rounded-2xl"
+              selectionMode={selectionMode}
             />
+
+            {/* Instruction tooltip when in pinning mode */}
+            {selectionMode && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/95 backdrop-blur text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-bold border border-slate-700/50 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-brand-400 animate-bounce" />
+                <span>
+                  Click anywhere on the map or drag pins to position your {selectionMode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectionMode(null)}
+                  className="ml-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded-lg text-[10px]"
+                >
+                  Done
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Route Summary Tag */}
-          {estimates && (
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-200">
-                  <Navigation className="w-5 h-5 text-brand-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-extrabold text-slate-900">
-                    Road Route: {estimates.distanceKm} km
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Estimated travel duration ~ {estimates.durationMinutes} minutes
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                  Real OSRM Route
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Preset location chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <span className="text-slate-400 font-bold flex items-center gap-1 text-[11px] whitespace-nowrap pl-1">
+              Popular:
+            </span>
+            {PRESET_LOCATIONS.map((loc) => (
+              <button
+                type="button"
+                key={loc.name}
+                onClick={() => {
+                  setDestination({
+                    address: `${loc.name}, Bengaluru`,
+                    lat: loc.lat,
+                    lng: loc.lng,
+                  });
+                }}
+                className="bg-white hover:bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs whitespace-nowrap text-[11px] transition-colors"
+              >
+                📍 {loc.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Right: Booking Panel or Active Ride Tracker */}
@@ -368,6 +476,7 @@ export const CustomerBookingPage: React.FC = () => {
                 setCaptainLocation(undefined);
               }}
               onPaymentCompleted={() => {
+                // Refresh active ride
                 api.rides.getById(activeRide.id).then(setActiveRide);
               }}
             />
@@ -376,7 +485,7 @@ export const CustomerBookingPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight">Book a Ride</h2>
-                  <p className="text-xs text-slate-500">Fast, reliable city rides at transparent rates</p>
+                  <p className="text-xs text-slate-500">Fast, reliable rides at transparent rates</p>
                 </div>
                 {isLoadingEstimate && (
                   <RefreshCw className="w-4 h-4 text-brand-600 animate-spin" />
@@ -384,76 +493,97 @@ export const CustomerBookingPage: React.FC = () => {
               </div>
 
               {errorMessage && (
-                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              {/* Autocomplete Locations Inputs */}
+              {/* Locations Input with AddressAutocomplete */}
               <div className="space-y-4">
-                {/* Pickup Autocomplete */}
                 <AddressAutocomplete
                   label="Pickup Location"
-                  placeholder="Search pickup locality, landmark, or street..."
+                  placeholder="Search pickup point or use current location..."
                   value={pickup.address}
                   onAddressChange={(address) => setPickup((prev) => ({ ...prev, address }))}
-                  onSelectLocation={(loc) => setPickup(loc)}
-                  userLat={currentLocation?.lat}
-                  userLng={currentLocation?.lng}
+                  onSelectLocation={(loc) =>
+                    setPickup({ address: loc.address, lat: loc.lat, lng: loc.lng })
+                  }
+                  userLat={pickup.lat}
+                  userLng={pickup.lng}
+                  onUseCurrentLocation={handleLocateUser}
+                  isLocating={isLocating}
                   markerColor="bg-emerald-500"
                   pinButton={
                     <button
                       type="button"
-                      onClick={() => setSelectionMode('pickup')}
-                      className="text-[11px] font-bold text-brand-700 hover:underline flex items-center gap-1"
+                      onClick={() =>
+                        setSelectionMode((prev) => (prev === 'pickup' ? null : 'pickup'))
+                      }
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 ${
+                        selectionMode === 'pickup'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-brand-700 hover:underline'
+                      }`}
                     >
-                      <Crosshair className="w-3 h-3" /> Pin
-                    </button>
-                  }
-                  locateButton={
-                    <button
-                      type="button"
-                      onClick={() => handleGetLocation(false)}
-                      title="Use device GPS"
-                      className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1"
-                    >
-                      <Navigation className="w-3 h-3" /> GPS
+                      <Crosshair className="w-3 h-3" /> Pin on map
                     </button>
                   }
                 />
 
-                {/* Destination Autocomplete */}
                 <AddressAutocomplete
                   label="Destination"
-                  placeholder="Search destination landmark, office, or area..."
+                  placeholder="Search destination..."
                   value={destination.address}
                   onAddressChange={(address) => setDestination((prev) => ({ ...prev, address }))}
-                  onSelectLocation={(loc) => setDestination(loc)}
-                  userLat={pickup.lat || currentLocation?.lat}
-                  userLng={pickup.lng || currentLocation?.lng}
+                  onSelectLocation={(loc) =>
+                    setDestination({ address: loc.address, lat: loc.lat, lng: loc.lng })
+                  }
+                  userLat={destination.lat}
+                  userLng={destination.lng}
                   markerColor="bg-red-500"
                   pinButton={
                     <button
                       type="button"
-                      onClick={() => setSelectionMode('destination')}
-                      className="text-[11px] font-bold text-brand-700 hover:underline flex items-center gap-1"
+                      onClick={() =>
+                        setSelectionMode((prev) => (prev === 'destination' ? null : 'destination'))
+                      }
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 ${
+                        selectionMode === 'destination'
+                          ? 'bg-red-600 text-white'
+                          : 'text-brand-700 hover:underline'
+                      }`}
                     >
-                      <Crosshair className="w-3 h-3" /> Pin
+                      <Crosshair className="w-3 h-3" /> Pin on map
                     </button>
                   }
                 />
               </div>
 
+              {/* Distance & Trip Time Banner */}
+              {estimates && (
+                <div className="p-3.5 bg-brand-50/60 rounded-2xl border border-brand-200/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🛣️</span>
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900">
+                        {estimates.distanceKm} km driving route
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Estimated trip duration ~{estimates.durationMinutes} mins
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-brand-700 bg-white px-2.5 py-1 rounded-xl shadow-sm border border-brand-200">
+                    Live Distance
+                  </span>
+                </div>
+              )}
+
               {/* Ride Categories list */}
               {estimates && (
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase">Available Rides</h3>
-                    <span className="text-[11px] font-bold text-slate-600">
-                      {estimates.distanceKm} km &bull; ~{estimates.durationMinutes} mins
-                    </span>
-                  </div>
+                  <h3 className="text-xs font-bold text-slate-500 uppercase">Available Rides</h3>
                   <div className="space-y-2.5">
                     {estimates.estimates.map((est) => (
                       <FareCard
@@ -464,6 +594,162 @@ export const CustomerBookingPage: React.FC = () => {
                       />
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Women-Only Passenger Eligibility & Traveler Selection */}
+              {selectedCategory === 'WOMEN_BIKE' && (
+                <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-3.5 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-purple-700" />
+                      <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider">
+                        Women-Only Traveler Verification
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-800">
+                      Demo Self-Declaration
+                    </span>
+                  </div>
+
+                  {/* Who is traveling toggle */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Who is Traveling?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsForSomeoneElse(false)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          !isForSomeoneElse
+                            ? 'border-purple-600 bg-white text-purple-900 shadow-sm ring-2 ring-purple-400/20'
+                            : 'border-purple-200 bg-purple-100/40 text-slate-600 hover:bg-white'
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5" /> For Myself
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsForSomeoneElse(true)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          isForSomeoneElse
+                            ? 'border-purple-600 bg-white text-purple-900 shadow-sm ring-2 ring-purple-400/20'
+                            : 'border-purple-200 bg-purple-100/40 text-slate-600 hover:bg-white'
+                        }`}
+                      >
+                        <Users className="w-3.5 h-3.5" /> Book for Someone Else
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Details for Myself */}
+                  {!isForSomeoneElse && (
+                    <div className="p-3 bg-white rounded-xl border border-purple-100 text-xs space-y-2">
+                      <p className="font-semibold text-slate-800">
+                        Passenger: <span className="font-bold text-slate-950">{user?.fullName || 'Current User'}</span> ({user?.phone || 'Account Phone'})
+                      </p>
+                      {user?.gender === 'MALE' ? (
+                        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] leading-relaxed">
+                          ⚠️ <strong>Eligibility Notice:</strong> Your account is registered as Male. Women-Only Bike rides are exclusively reserved for women travelers. If you are booking for a wife, mother, sister, daughter, or female companion, please select <strong>'Book for Someone Else'</strong> above, or select standard Bike/Auto/Cab for yourself.
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-purple-800 flex items-center gap-1 font-medium">
+                          <span>✓</span> Self-declaration: Eligible female traveler for Women-Only service.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Details for Someone Else */}
+                  {isForSomeoneElse && (
+                    <div className="space-y-3 p-3 bg-white rounded-xl border border-purple-100 text-xs">
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Enter traveler contact details so the captain can coordinate pickup directly.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Traveler Full Name *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Sunita Sharma"
+                            value={travelerName}
+                            onChange={(e) => setTravelerName(e.target.value)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-1 focus:ring-purple-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Traveler Phone *</label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="+91 98765 43210"
+                            value={travelerPhone}
+                            onChange={(e) => setTravelerPhone(e.target.value)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-1 focus:ring-purple-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Relationship to Traveler *</label>
+                          <select
+                            value={travelerRelationship}
+                            onChange={(e) => setTravelerRelationship(e.target.value)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold bg-white focus:ring-1 focus:ring-purple-500"
+                          >
+                            <option value="Wife">Wife</option>
+                            <option value="Mother">Mother</option>
+                            <option value="Sister">Sister</option>
+                            <option value="Daughter">Daughter</option>
+                            <option value="Friend">Friend</option>
+                            <option value="Other">Other Relative / Companion</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Traveler Gender *</label>
+                          <select
+                            value={travelerGender}
+                            onChange={(e) => setTravelerGender(e.target.value as any)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold bg-white focus:ring-1 focus:ring-purple-500"
+                          >
+                            <option value="FEMALE">Female (Eligible)</option>
+                            <option value="MALE">Male (Ineligible)</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {travelerGender !== 'FEMALE' && (
+                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-[11px]">
+                          ⚠️ Women-Only Bike bookings are reserved exclusively for women passengers. Please select Female or switch to standard Bike, Auto, or Cab.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Demo disclaimer notice */}
+                  <div className="pt-1">
+                    <label className="flex items-start gap-2 text-[11px] text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={passengerDeclarationConfirmed}
+                        onChange={(e) => setPassengerDeclarationConfirmed(e.target.checked)}
+                        className="mt-0.5 rounded text-purple-600 focus:ring-purple-500"
+                      />
+                      <span>
+                        <strong>Demo Verification Acknowledgment:</strong> I declare that the actual traveler boarding this ride is a female passenger. I understand this is a simulation prototype for demo/testing only and does not represent official biometric or legal identity proof.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Captain availability alert if 0 captains */}
+                  {isSelectedCategoryUnavailable && (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                      <span>No verified Women-Only Bike captains are currently available nearby. We will never assign a standard captain silently. Please retry shortly or choose another category.</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -531,11 +817,15 @@ export const CustomerBookingPage: React.FC = () => {
               {/* Book Ride Action */}
               <button
                 type="button"
-                disabled={isBooking || !estimates || !pickup.lat || !destination.lat}
+                disabled={isBooking || !estimates || isSelectedCategoryUnavailable}
                 onClick={handleBookRide}
-                className="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50"
+                className={`w-full font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50 ${
+                  selectedCategory === 'WOMEN_BIKE'
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-200'
+                    : 'bg-brand-500 hover:bg-brand-600 text-slate-950'
+                }`}
               >
-                {isBooking ? 'Dispatching Request...' : 'Confirm & Request Captain'}
+                {isBooking ? 'Dispatching Request...' : isSelectedCategoryUnavailable ? 'No Women-Only Captains Nearby' : 'Confirm & Request Captain'}
                 <ArrowRight className="w-5 h-5" />
               </button>
             </div>

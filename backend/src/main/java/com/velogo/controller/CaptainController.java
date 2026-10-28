@@ -40,6 +40,15 @@ public class CaptainController {
         return ResponseEntity.ok(captainService.toggleAvailability(userDetails.getId(), req.online()));
     }
 
+    @PostMapping("/women-only/apply")
+    @Operation(summary = "Captain applies for Women-Only Bike program with demo declaration")
+    public ResponseEntity<AuthDtos.CaptainSummaryDto> applyWomenOnly(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody CaptainDtos.ApplyWomenOnlyRequest req
+    ) {
+        return ResponseEntity.ok(captainService.applyForWomenOnly(userDetails.getId(), req));
+    }
+
     @PostMapping("/location")
     @Operation(summary = "Send GPS location update")
     public ResponseEntity<Void> updateLocation(

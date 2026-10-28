@@ -81,6 +81,26 @@ public class Ride {
     @Column(name = "otp_code", nullable = false, length = 6)
     private String otpCode;
 
+    @Column(name = "is_for_someone_else", nullable = false)
+    @Builder.Default
+    private boolean isForSomeoneElse = false;
+
+    @Column(name = "traveler_name", length = 100)
+    private String travelerName;
+
+    @Column(name = "traveler_phone", length = 20)
+    private String travelerPhone;
+
+    @Column(name = "traveler_relationship", length = 50)
+    private String travelerRelationship;
+
+    @Column(name = "traveler_gender", length = 20)
+    private String travelerGender;
+
+    @Column(name = "passenger_declaration_acknowledged", nullable = false)
+    @Builder.Default
+    private boolean passengerDeclarationAcknowledged = false;
+
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
 

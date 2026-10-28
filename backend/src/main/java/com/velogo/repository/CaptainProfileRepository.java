@@ -25,4 +25,11 @@ public interface CaptainProfileRepository extends JpaRepository<CaptainProfile, 
            "WHERE c.verificationStatus = com.velogo.domain.enums.VerificationStatus.APPROVED " +
            "AND c.online = true AND c.available = true AND v.category = :category")
     List<CaptainProfile> findAvailableCaptainsByCategory(@Param("category") VehicleCategory category);
+
+    @Query("SELECT c FROM CaptainProfile c JOIN FETCH c.vehicle v JOIN FETCH c.user u " +
+           "WHERE c.verificationStatus = com.velogo.domain.enums.VerificationStatus.APPROVED " +
+           "AND c.online = true AND c.available = true " +
+           "AND c.womenOnlyEligible = true " +
+           "AND (v.category = com.velogo.domain.enums.VehicleCategory.BIKE OR v.category = com.velogo.domain.enums.VehicleCategory.WOMEN_BIKE)")
+    List<CaptainProfile> findAvailableCaptainsForWomenOnly();
 }

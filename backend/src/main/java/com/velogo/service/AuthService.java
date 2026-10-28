@@ -70,6 +70,8 @@ public class AuthService {
             throw new BadRequestException("An account with phone " + req.phone() + " already exists.");
         }
 
+        String gender = (req.gender() != null && !req.gender().isBlank()) ? req.gender().trim().toUpperCase() : "UNSPECIFIED";
+
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .email(req.email().trim().toLowerCase())
@@ -78,6 +80,7 @@ public class AuthService {
                 .fullName(req.fullName().trim())
                 .role(Role.ROLE_CUSTOMER)
                 .active(true)
+                .gender(gender)
                 .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150")
                 .build();
         User savedUser = userRepository.save(user);
@@ -127,6 +130,7 @@ public class AuthService {
                 .fullName(req.fullName().trim())
                 .role(Role.ROLE_CAPTAIN)
                 .active(true)
+                .gender("UNSPECIFIED")
                 .avatarUrl("https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150")
                 .build();
         User savedUser = userRepository.save(user);
@@ -138,6 +142,8 @@ public class AuthService {
                 .verificationStatus(VerificationStatus.PENDING)
                 .online(false)
                 .available(false)
+                .womenOnlyEligible(false)
+                .womenOnlyStatus("NOT_APPLIED")
                 .ratingAvg(new BigDecimal("5.00"))
                 .totalRides(0)
                 .totalEarnings(BigDecimal.ZERO)
@@ -229,6 +235,7 @@ public class AuthService {
                 user.getRole(),
                 user.isActive(),
                 user.getAvatarUrl(),
+                user.getGender(),
                 captainSummary
         );
     }

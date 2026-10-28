@@ -36,7 +36,8 @@ public class AuthDtos {
             String password,
 
             String emergencyContactName,
-            String emergencyContactPhone
+            String emergencyContactPhone,
+            String gender
     ) {}
 
     public record RegisterCaptainRequest(
@@ -89,6 +90,8 @@ public class AuthDtos {
             String rejectionReason,
             boolean online,
             boolean available,
+            boolean womenOnlyEligible,
+            String womenOnlyStatus,
             BigDecimal currentLatitude,
             BigDecimal currentLongitude,
             BigDecimal ratingAvg,
@@ -105,6 +108,7 @@ public class AuthDtos {
             Role role,
             boolean active,
             String avatarUrl,
+            String gender,
             CaptainSummaryDto captainProfile
     ) {}
 
