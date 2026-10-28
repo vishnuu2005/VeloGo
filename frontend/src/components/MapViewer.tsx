@@ -159,14 +159,43 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    const initialLat = pickup?.lat || currentLocation?.lat || 12.9756;
-    const initialLng = pickup?.lng || currentLocation?.lng || 77.6066;
+    const container = mapContainerRef.current as any;
 
-    const map = L.map(mapContainerRef.current, {
-      zoomControl: true,
-      attributionControl: true,
-      preferCanvas: false, // Use SVG for rich styling, animations, and glowing filters
-    }).setView([initialLat, initialLng], zoom);
+    // Defensively handle React 18/19 StrictMode remounts or HMR updates
+    if (container._leaflet_id) {
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch {}
+        mapInstanceRef.current = null;
+      }
+      delete container._leaflet_id;
+    }
+
+    const initialLat =
+      pickup?.lat && !isNaN(pickup.lat)
+        ? pickup.lat
+        : currentLocation?.lat && !isNaN(currentLocation.lat)
+        ? currentLocation.lat
+        : 12.9756;
+    const initialLng =
+      pickup?.lng && !isNaN(pickup.lng)
+        ? pickup.lng
+        : currentLocation?.lng && !isNaN(currentLocation.lng)
+        ? currentLocation.lng
+        : 77.6066;
+
+    let map: L.Map;
+    try {
+      map = L.map(container, {
+        zoomControl: true,
+        attributionControl: true,
+        preferCanvas: false, // Use SVG for rich styling, animations, and glowing filters
+      }).setView([initialLat, initialLng], zoom);
+    } catch (err) {
+      console.error('Leaflet map creation error:', err);
+      return;
+    }
 
     // High-performance OpenStreetMap raster tiles with generous buffer to prevent blank spaces
     const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -276,23 +305,36 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     // Invalidate size to guarantee zero blank spaces on initial render or resize
     const invalidate = () => {
-      map.invalidateSize();
+      if (mapInstanceRef.current && (mapInstanceRef.current as any)._container) {
+        try {
+          mapInstanceRef.current.invalidateSize();
+        } catch {}
+      }
     };
 
     const timer1 = setTimeout(invalidate, 100);
     const timer2 = setTimeout(invalidate, 400);
 
     const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
+      invalidate();
     });
-    resizeObserver.observe(mapContainerRef.current);
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
       resizeObserver.disconnect();
-      map.remove();
-      mapInstanceRef.current = null;
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch {}
+        mapInstanceRef.current = null;
+      }
+      if (container && container._leaflet_id) {
+        delete container._leaflet_id;
+      }
       tileLayerRef.current = null;
       markersRef.current = {};
     };
@@ -401,10 +443,38 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     }
 
     // 5. Draw Next-Level Highlighted Road Path (Triple-Layer: Casing + Neon Glow + Flow Animation)
-    if (pickup?.lat && pickup?.lng && destination?.lat && destination?.lng) {
-      const pts: [number, number][] =
-        routeGeometry && routeGeometry.length > 0
+    if (
+      pickup?.lat &&
+      pickup?.lng &&
+      destination?.lat &&
+      destination?.lng &&
+      !isNaN(pickup.lat) &&
+      !isNaN(pickup.lng) &&
+      !isNaN(destination.lat) &&
+      !isNaN(destination.lng)
+    ) {
+      // Validate every coordinate pair to guarantee valid numeric arrays
+      const rawPts =
+        routeGeometry && Array.isArray(routeGeometry) && routeGeometry.length > 0
           ? routeGeometry
+          : [
+              [pickup.lat, pickup.lng],
+              [destination.lat, destination.lng],
+            ];
+
+      const validPts = rawPts.filter(
+        (p): p is [number, number] =>
+          Array.isArray(p) &&
+          p.length >= 2 &&
+          typeof p[0] === 'number' &&
+          !isNaN(p[0]) &&
+          typeof p[1] === 'number' &&
+          !isNaN(p[1])
+      );
+
+      const pts: [number, number][] =
+        validPts.length >= 2
+          ? validPts
           : [
               [pickup.lat, pickup.lng],
               [destination.lat, destination.lng],
@@ -457,39 +527,57 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       const startPt = pts[0];
       const finishPt = pts[pts.length - 1];
 
-      if (markersRef.current.startBadge && map.hasLayer(markersRef.current.startBadge)) {
-        markersRef.current.startBadge.setLatLng(startPt);
-      } else {
-        markersRef.current.startBadge = L.marker(startPt, {
-          icon: createWayBadgeIcon('START 🟢', '#10b981', '#ffffff'),
-          zIndexOffset: 150,
-          interactive: false,
-        }).addTo(map);
+      if (startPt && Array.isArray(startPt) && typeof startPt[0] === 'number') {
+        if (markersRef.current.startBadge && map.hasLayer(markersRef.current.startBadge)) {
+          markersRef.current.startBadge.setLatLng(startPt);
+        } else {
+          markersRef.current.startBadge = L.marker(startPt, {
+            icon: createWayBadgeIcon('START 🟢', '#10b981', '#ffffff'),
+            zIndexOffset: 150,
+            interactive: false,
+          }).addTo(map);
+        }
       }
 
-      if (markersRef.current.finishBadge && map.hasLayer(markersRef.current.finishBadge)) {
-        markersRef.current.finishBadge.setLatLng(finishPt);
-      } else {
-        markersRef.current.finishBadge = L.marker(finishPt, {
-          icon: createWayBadgeIcon('FINISH 🏁', '#ef4444', '#ffffff'),
-          zIndexOffset: 150,
-          interactive: false,
-        }).addTo(map);
+      if (finishPt && Array.isArray(finishPt) && typeof finishPt[0] === 'number') {
+        if (markersRef.current.finishBadge && map.hasLayer(markersRef.current.finishBadge)) {
+          markersRef.current.finishBadge.setLatLng(finishPt);
+        } else {
+          markersRef.current.finishBadge = L.marker(finishPt, {
+            icon: createWayBadgeIcon('FINISH 🏁', '#ef4444', '#ffffff'),
+            zIndexOffset: 150,
+            interactive: false,
+          }).addTo(map);
+        }
       }
 
       // Smoothly zoom and fit both markers and entire highlighted road path in view
-      const bounds = L.latLngBounds(pts);
-      bounds.extend([pickup.lat, pickup.lng]);
-      bounds.extend([destination.lat, destination.lng]);
-      if (captainLocation?.lat && captainLocation?.lng) {
-        bounds.extend([captainLocation.lat, captainLocation.lng]);
-      }
+      try {
+        const bounds = L.latLngBounds(pts);
+        bounds.extend([pickup.lat, pickup.lng]);
+        bounds.extend([destination.lat, destination.lng]);
+        if (
+          captainLocation?.lat &&
+          captainLocation?.lng &&
+          !isNaN(captainLocation.lat) &&
+          !isNaN(captainLocation.lng)
+        ) {
+          bounds.extend([captainLocation.lat, captainLocation.lng]);
+        }
 
-      map.fitBounds(bounds, {
-        padding: [60, 60],
-        maxZoom: 16,
-        animate: true,
-      });
+        if (bounds.isValid() && (map as any)._container) {
+          const size = map.getSize();
+          if (size.x > 0 && size.y > 0) {
+            map.fitBounds(bounds, {
+              padding: [60, 60],
+              maxZoom: 16,
+              animate: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Map fitBounds failed:', err);
+      }
     } else {
       // Clean up polylines if points are cleared
       if (markersRef.current.routeCasing) {
@@ -513,17 +601,31 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         delete markersRef.current.finishBadge;
       }
 
-      if (pickup?.lat && pickup?.lng) {
-        map.setView([pickup.lat, pickup.lng], 14, { animate: true });
-      } else if (destination?.lat && destination?.lng) {
-        map.setView([destination.lat, destination.lng], 14, { animate: true });
+      try {
+        if (pickup?.lat && pickup?.lng && !isNaN(pickup.lat) && !isNaN(pickup.lng)) {
+          map.setView([pickup.lat, pickup.lng], 14, { animate: true });
+        } else if (
+          destination?.lat &&
+          destination?.lng &&
+          !isNaN(destination.lat) &&
+          !isNaN(destination.lng)
+        ) {
+          map.setView([destination.lat, destination.lng], 14, { animate: true });
+        }
+      } catch (err) {
+        console.warn('Map setView failed:', err);
       }
     }
 
     // Invalidate size to guarantee tiles draw smoothly
-    setTimeout(() => {
-      map.invalidateSize();
+    const t = setTimeout(() => {
+      if (mapInstanceRef.current && (mapInstanceRef.current as any)._container) {
+        try {
+          mapInstanceRef.current.invalidateSize();
+        } catch {}
+      }
     }, 100);
+    return () => clearTimeout(t);
   }, [mapReady, pickup, destination, captainLocation, currentLocation, routeGeometry]);
 
   // Handle crosshair cursor and auto-pan for selectionMode without wiping out Leaflet DOM classes
@@ -534,31 +636,49 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     if (selectionMode) {
       container.classList.add('leaflet-crosshair-mode');
-      if (selectionMode === 'pickup' && pickup?.lat && pickup?.lng) {
+      if (selectionMode === 'pickup' && pickup?.lat && pickup?.lng && !isNaN(pickup.lat) && !isNaN(pickup.lng)) {
         map.panTo([pickup.lat, pickup.lng], { animate: true });
-      } else if (selectionMode === 'destination' && destination?.lat && destination?.lng) {
+      } else if (selectionMode === 'destination' && destination?.lat && destination?.lng && !isNaN(destination.lat) && !isNaN(destination.lng)) {
         map.panTo([destination.lat, destination.lng], { animate: true });
       }
     } else {
       container.classList.remove('leaflet-crosshair-mode');
     }
 
-    setTimeout(() => {
-      map.invalidateSize();
+    const t = setTimeout(() => {
+      if (mapInstanceRef.current && (mapInstanceRef.current as any)._container) {
+        try {
+          mapInstanceRef.current.invalidateSize();
+        } catch {}
+      }
     }, 50);
+    return () => clearTimeout(t);
   }, [selectionMode, pickup?.lat, pickup?.lng, destination?.lat, destination?.lng]);
 
   const handleRecenter = () => {
     const map = mapInstanceRef.current;
-    if (!map) return;
-    if (pickup?.lat && destination?.lat) {
-      const bounds = L.latLngBounds([
-        [pickup.lat, pickup.lng],
-        [destination.lat, destination.lng],
-      ]);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-    } else if (pickup?.lat) {
-      map.setView([pickup.lat, pickup.lng], 14);
+    if (!map || !(map as any)._container) return;
+    try {
+      if (
+        pickup?.lat &&
+        destination?.lat &&
+        !isNaN(pickup.lat) &&
+        !isNaN(pickup.lng) &&
+        !isNaN(destination.lat) &&
+        !isNaN(destination.lng)
+      ) {
+        const bounds = L.latLngBounds([
+          [pickup.lat, pickup.lng],
+          [destination.lat, destination.lng],
+        ]);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        }
+      } else if (pickup?.lat && !isNaN(pickup.lat) && !isNaN(pickup.lng)) {
+        map.setView([pickup.lat, pickup.lng], 14);
+      }
+    } catch (err) {
+      console.warn('handleRecenter failed:', err);
     }
   };
 

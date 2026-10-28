@@ -269,7 +269,7 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
           <div>
             <p className="text-[11px] font-semibold text-slate-400">Total Ride Fare</p>
             <p className="text-2xl font-black text-slate-900">
-              ₹{(ride.finalFare || ride.estimatedFare).toFixed(2)}
+              ₹{Number(ride.finalFare || ride.estimatedFare || 0).toFixed(2)}
             </p>
           </div>
 

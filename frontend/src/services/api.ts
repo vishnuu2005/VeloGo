@@ -1,4 +1,4 @@
-﻿import {
+import {
   AuthResponse,
   CategoryEstimate,
   CaptainSummary,
@@ -100,19 +100,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (response.status === 204) {
+    return null as unknown as T;
+  }
+
+  const text = await response.text();
+  if (!text || !text.trim()) {
+    return null as unknown as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
     return {} as T;
   }
-
-  if (!isJson) {
-    const text = await response.text();
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      return {} as T;
-    }
-  }
-
-  return response.json();
 }
 
 export const api = {

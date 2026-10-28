@@ -75,13 +75,13 @@ export const FareCard: React.FC<FareCardProps> = ({ estimate, isSelected, onSele
 
         {/* Right: Price & select indicator */}
         <div className="text-right">
-          {estimate.discountAmount > 0 && (
+          {Number(estimate.discountAmount || 0) > 0 && (
             <p className="text-xs text-slate-400 line-through font-medium">
-              ₹{(estimate.totalFare + estimate.discountAmount).toFixed(2)}
+              ₹{(Number(estimate.totalFare || 0) + Number(estimate.discountAmount || 0)).toFixed(2)}
             </p>
           )}
           <p className="text-xl font-extrabold text-slate-900">
-            ₹{estimate.totalFare.toFixed(2)}
+            ₹{Number(estimate.totalFare || 0).toFixed(2)}
           </p>
           <button
             type="button"
@@ -101,29 +101,29 @@ export const FareCard: React.FC<FareCardProps> = ({ estimate, isSelected, onSele
         <div className="mt-3 pt-3 border-t border-slate-200/80 text-xs text-slate-600 space-y-1.5 animate-fadeIn">
           <div className="flex justify-between">
             <span>Base Fare</span>
-            <span>₹{estimate.baseFare.toFixed(2)}</span>
+            <span>₹{Number(estimate.baseFare || 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Distance Charge ({estimate.distanceKm} km)</span>
-            <span>₹{estimate.distanceCharge.toFixed(2)}</span>
+            <span>Distance Charge ({estimate.distanceKm ?? 0} km)</span>
+            <span>₹{Number(estimate.distanceCharge || 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Time Charge ({estimate.durationMinutes} mins)</span>
-            <span>₹{estimate.timeCharge.toFixed(2)}</span>
+            <span>Time Charge ({estimate.durationMinutes ?? 0} mins)</span>
+            <span>₹{Number(estimate.timeCharge || 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
             <span>Platform & Safety Fee</span>
-            <span>₹{estimate.bookingFee.toFixed(2)}</span>
+            <span>₹{Number(estimate.bookingFee || 0).toFixed(2)}</span>
           </div>
-          {estimate.discountAmount > 0 && (
+          {Number(estimate.discountAmount || 0) > 0 && (
             <div className="flex justify-between text-emerald-600 font-semibold">
               <span>Promotional Discount</span>
-              <span>-₹{estimate.discountAmount.toFixed(2)}</span>
+              <span>-₹{Number(estimate.discountAmount || 0).toFixed(2)}</span>
             </div>
           )}
           <div className="flex justify-between text-slate-400">
             <span>Applicable Taxes</span>
-            <span>₹{estimate.taxAmount.toFixed(2)}</span>
+            <span>₹{Number(estimate.taxAmount || 0).toFixed(2)}</span>
           </div>
         </div>
       )}

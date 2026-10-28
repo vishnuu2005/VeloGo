@@ -12,6 +12,7 @@ import {
 import { MapViewer } from '../components/MapViewer';
 import { FareCard } from '../components/FareCard';
 import { RideStatusModal } from '../components/RideStatusModal';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
   MapPin,
   Tag,
@@ -98,15 +99,19 @@ export const CustomerBookingPage: React.FC = () => {
     const cat = params.get('cat') as VehicleCategory | null;
 
     if (pLat && pLng) {
-      setPickup({
-        address: pAddr || 'Pickup Point',
-        lat: parseFloat(pLat),
-        lng: parseFloat(pLng),
-      });
+      const parsedLat = parseFloat(pLat);
+      const parsedLng = parseFloat(pLng);
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        setPickup({
+          address: pAddr || 'Pickup Point',
+          lat: parsedLat,
+          lng: parsedLng,
+        });
+      }
     } else if (pAddr) {
       setPickup((prev) => ({ ...prev, address: pAddr }));
       api.geo.search(pAddr).then((results) => {
-        if (results && results.length > 0) {
+        if (results && results.length > 0 && typeof results[0].latitude === 'number' && typeof results[0].longitude === 'number') {
           setPickup({
             address: results[0].displayName || pAddr,
             lat: results[0].latitude,
@@ -117,15 +122,19 @@ export const CustomerBookingPage: React.FC = () => {
     }
 
     if (dLat && dLng) {
-      setDestination({
-        address: dAddr || 'Destination Point',
-        lat: parseFloat(dLat),
-        lng: parseFloat(dLng),
-      });
+      const parsedLat = parseFloat(dLat);
+      const parsedLng = parseFloat(dLng);
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        setDestination({
+          address: dAddr || 'Destination Point',
+          lat: parsedLat,
+          lng: parsedLng,
+        });
+      }
     } else if (dAddr) {
       setDestination((prev) => ({ ...prev, address: dAddr }));
       api.geo.search(dAddr).then((results) => {
-        if (results && results.length > 0) {
+        if (results && results.length > 0 && typeof results[0].latitude === 'number' && typeof results[0].longitude === 'number') {
           setDestination({
             address: results[0].displayName || dAddr,
             lat: results[0].latitude,
@@ -351,7 +360,7 @@ export const CustomerBookingPage: React.FC = () => {
       }
 
       // Check captain availability for Women-Only Bike
-      const womenEstimate = estimates?.estimates.find((e) => e.category === 'WOMEN_BIKE');
+      const womenEstimate = estimates?.estimates?.find((e) => e.category === 'WOMEN_BIKE');
       if (womenEstimate && !womenEstimate.isAvailable) {
         setErrorMessage('No verified Women-Only Bike captains are currently available in your pickup area. Please retry shortly or select standard Bike, Auto, or Cab.');
         return;
@@ -396,33 +405,38 @@ export const CustomerBookingPage: React.FC = () => {
         {/* Left: Map Viewer */}
         <div className="lg:col-span-7 order-2 lg:order-1 space-y-4">
           <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200 relative overflow-hidden h-[540px] lg:h-[650px] min-h-[480px]">
-            <MapViewer
-              pickup={
-                activeRide
-                  ? {
-                      lat: activeRide.pickupLat,
-                      lng: activeRide.pickupLng,
-                      address: activeRide.pickupAddress,
-                    }
-                  : pickup
-              }
-              destination={
-                activeRide
-                  ? {
-                      lat: activeRide.destLat,
-                      lng: activeRide.destLng,
-                      address: activeRide.destAddress,
-                    }
-                  : destination
-              }
-              captainLocation={captainLocation}
-              currentLocation={currentLocation}
-              routeGeometry={estimates?.routeGeometry}
-              onPickupChange={handleMapPickupChange}
-              onDestinationChange={handleMapDestChange}
-              onMapClick={handleMapClick}
-              selectionMode={selectionMode}
-            />
+            <ErrorBoundary fallbackTitle="Map Navigation Temporarily Unavailable">
+              <MapViewer
+                pickup={
+                  activeRide
+                    ? {
+                        lat: activeRide.pickupLat,
+                        lng: activeRide.pickupLng,
+                        address: activeRide.pickupAddress,
+                      }
+                    : pickup
+                }
+                destination={
+                  activeRide
+                    ? {
+                        lat: activeRide.destLat,
+                        lng: activeRide.destLng,
+                        address: activeRide.destAddress,
+                      }
+                    : destination
+                }
+                captainLocation={captainLocation}
+                currentLocation={currentLocation}
+                routeGeometry={estimates?.routeGeometry}
+                onPickupChange={handleMapPickupChange}
+                onDestinationChange={handleMapDestChange}
+                onMapClick={handleMapClick}
+                selectionMode={selectionMode}
+                onSelectionModeChange={setSelectionMode}
+                onLocateUser={handleLocateUser}
+                isLocating={isLocating}
+              />
+            </ErrorBoundary>
 
             {/* Instruction tooltip when in pinning mode */}
             {selectionMode && (
@@ -561,7 +575,7 @@ export const CustomerBookingPage: React.FC = () => {
               </div>
 
               {/* Distance & Trip Time Banner */}
-              {estimates && (
+              {estimates && typeof estimates.distanceKm === 'number' && (
                 <div className="p-3.5 bg-brand-50/60 rounded-2xl border border-brand-200/80 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">🛣️</span>
@@ -570,7 +584,7 @@ export const CustomerBookingPage: React.FC = () => {
                         {estimates.distanceKm} km driving route
                       </p>
                       <p className="text-[11px] text-slate-500">
-                        Estimated trip duration ~{estimates.durationMinutes} mins
+                        Estimated trip duration ~{estimates.durationMinutes ?? 10} mins
                       </p>
                     </div>
                   </div>
@@ -580,8 +594,20 @@ export const CustomerBookingPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Loading skeleton for estimates */}
+              {isLoadingEstimate && !estimates && (
+                <div className="space-y-3 animate-pulse">
+                  <div className="h-4 bg-slate-200 rounded w-28"></div>
+                  <div className="space-y-2">
+                    <div className="h-16 bg-slate-100 rounded-2xl border border-slate-200"></div>
+                    <div className="h-16 bg-slate-100 rounded-2xl border border-slate-200"></div>
+                    <div className="h-16 bg-slate-100 rounded-2xl border border-slate-200"></div>
+                  </div>
+                </div>
+              )}
+
               {/* Ride Categories list */}
-              {estimates && (
+              {estimates && Array.isArray(estimates.estimates) && estimates.estimates.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold text-slate-500 uppercase">Available Rides</h3>
                   <div className="space-y-2.5">
@@ -776,7 +802,7 @@ export const CustomerBookingPage: React.FC = () => {
                 {estimates?.couponApplied && (
                   <p className="text-xs font-bold text-emerald-600 mt-1.5 flex items-center gap-1">
                     ✓ Code '{estimates.couponApplied.code}' applied: Save ₹
-                    {estimates.couponApplied.discountAmount.toFixed(2)}
+                    {Number(estimates.couponApplied.discountAmount || 0).toFixed(2)}
                   </p>
                 )}
               </div>

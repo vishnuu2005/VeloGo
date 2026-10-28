@@ -11,6 +11,7 @@ import { CaptainDashboardPage } from './pages/CaptainDashboardPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { LoginPage, CustomerRegisterPage, CaptainRegisterPage } from './pages/AuthPages';
 import { SafetyPage } from './pages/SafetyPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
 
@@ -49,54 +50,56 @@ export const App: React.FC = () => {
             <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-brand-500 selection:text-slate-950">
               <Navbar />
               <main className="flex-1">
-                <Routes>
-                  <Route path="/" element={<LandingPage />} />
-                  <Route path="/book" element={<CustomerBookingPage />} />
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<CustomerRegisterPage />} />
-                  <Route path="/captain/register" element={<CaptainRegisterPage />} />
-                  <Route path="/safety" element={<SafetyPage />} />
+                <ErrorBoundary>
+                  <Routes>
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/book" element={<CustomerBookingPage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<CustomerRegisterPage />} />
+                    <Route path="/captain/register" element={<CaptainRegisterPage />} />
+                    <Route path="/safety" element={<SafetyPage />} />
 
-                  {/* Customer Routes */}
-                  <Route
-                    path="/customer/dashboard"
-                    element={
-                      <ProtectedRoute allowedRoles={['ROLE_CUSTOMER', 'ROLE_ADMIN']}>
-                        <CustomerDashboardPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/customer/history"
-                    element={
-                      <ProtectedRoute allowedRoles={['ROLE_CUSTOMER', 'ROLE_ADMIN']}>
-                        <CustomerDashboardPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Customer Routes */}
+                    <Route
+                      path="/customer/dashboard"
+                      element={
+                        <ProtectedRoute allowedRoles={['ROLE_CUSTOMER', 'ROLE_ADMIN']}>
+                          <CustomerDashboardPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/customer/history"
+                      element={
+                        <ProtectedRoute allowedRoles={['ROLE_CUSTOMER', 'ROLE_ADMIN']}>
+                          <CustomerDashboardPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Captain Routes */}
-                  <Route
-                    path="/captain/dashboard"
-                    element={
-                      <ProtectedRoute allowedRoles={['ROLE_CAPTAIN', 'ROLE_ADMIN']}>
-                        <CaptainDashboardPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Captain Routes */}
+                    <Route
+                      path="/captain/dashboard"
+                      element={
+                        <ProtectedRoute allowedRoles={['ROLE_CAPTAIN', 'ROLE_ADMIN']}>
+                          <CaptainDashboardPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Admin Routes */}
-                  <Route
-                    path="/admin/dashboard"
-                    element={
-                      <ProtectedRoute allowedRoles={['ROLE_ADMIN']}>
-                        <AdminDashboardPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Admin Routes */}
+                    <Route
+                      path="/admin/dashboard"
+                      element={
+                        <ProtectedRoute allowedRoles={['ROLE_ADMIN']}>
+                          <AdminDashboardPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </ErrorBoundary>
               </main>
             </div>
           </Router>
