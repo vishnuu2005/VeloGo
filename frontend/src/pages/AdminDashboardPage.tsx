@@ -10,6 +10,7 @@ import {
 } from '../types';
 import {
   Shield,
+  ShieldCheck,
   Users,
   Car,
   Clock,
@@ -40,6 +41,11 @@ export const AdminDashboardPage: React.FC = () => {
   const [selectedCaptain, setSelectedCaptain] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // Women-Only program review modal
+  const [womenOnlyModalCaptain, setWomenOnlyModalCaptain] = useState<any | null>(null);
+  const [womenOnlyRejectReason, setWomenOnlyRejectReason] = useState('');
+  const [isWomenOnlyVerifying, setIsWomenOnlyVerifying] = useState(false);
 
   // New coupon form
   const [newCoupon, setNewCoupon] = useState({
@@ -91,6 +97,27 @@ export const AdminDashboardPage: React.FC = () => {
       alert(err.message || 'Verification update failed');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleVerifyWomenOnly = async (captainId: string, status: 'APPROVED' | 'REJECTED') => {
+    setIsWomenOnlyVerifying(true);
+    try {
+      await api.admin.verifyWomenOnlyCaptain(
+        captainId,
+        status,
+        status === 'REJECTED' ? womenOnlyRejectReason : undefined
+      );
+      setWomenOnlyModalCaptain(null);
+      setWomenOnlyRejectReason('');
+      if (selectedCaptain && selectedCaptain.id === captainId) {
+        setSelectedCaptain(null);
+      }
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Women-only status update failed');
+    } finally {
+      setIsWomenOnlyVerifying(false);
     }
   };
 
@@ -260,6 +287,7 @@ export const AdminDashboardPage: React.FC = () => {
                   <th className="pb-3">License Number</th>
                   <th className="pb-3">Vehicle Details</th>
                   <th className="pb-3">Status</th>
+                  <th className="pb-3">Women-Only</th>
                   <th className="pb-3">Rating / Rides</th>
                   <th className="pb-3 text-right">Actions</th>
                 </tr>
@@ -293,10 +321,44 @@ export const AdminDashboardPage: React.FC = () => {
                         {c.verificationStatus}
                       </span>
                     </td>
+                    <td className="py-3.5">
+                      {c.vehicle?.category !== 'BIKE' ? (
+                        <span className="text-[10px] text-slate-400 font-medium">N/A (Non-Bike)</span>
+                      ) : c.womenOnlyStatus === 'APPROVED' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                          <ShieldCheck className="w-3 h-3 text-purple-700" /> Approved
+                        </span>
+                      ) : c.womenOnlyStatus === 'APPLIED' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">
+                          <Clock className="w-3 h-3 text-amber-700" /> Pending Review
+                        </span>
+                      ) : c.womenOnlyStatus === 'REJECTED' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-200">
+                          <XCircle className="w-3 h-3 text-red-700" /> Rejected
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-medium">Not Applied</span>
+                      )}
+                    </td>
                     <td className="py-3.5 font-semibold text-slate-700">
                       ★ {c.ratingAvg} ({c.totalRides} trips)
                     </td>
                     <td className="py-3.5 text-right space-x-2">
+                      {c.vehicle?.category === 'BIKE' && (
+                        <button
+                          onClick={() => {
+                            setWomenOnlyModalCaptain(c);
+                            setWomenOnlyRejectReason('');
+                          }}
+                          className={`px-2.5 py-1 font-bold rounded-lg text-xs transition-colors ${
+                            c.womenOnlyStatus === 'APPLIED'
+                              ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm ring-2 ring-purple-300'
+                              : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200'
+                          }`}
+                        >
+                          Women-Only
+                        </button>
+                      )}
                       <button
                         onClick={() => setSelectedCaptain(c)}
                         className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors"
@@ -582,6 +644,29 @@ export const AdminDashboardPage: React.FC = () => {
               />
             </div>
 
+            {selectedCaptain.vehicle?.category === 'BIKE' && (
+              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-900 flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4 text-purple-600" /> Women-Only Program
+                  </span>
+                  <span className="font-extrabold text-[10px] px-2 py-0.5 rounded-full uppercase bg-purple-100 text-purple-800">
+                    {selectedCaptain.womenOnlyStatus || 'NOT_APPLIED'}
+                  </span>
+                </div>
+                {selectedCaptain.womenOnlyRejectionReason && (
+                  <p className="text-red-700 text-[11px]">
+                    <strong>Rejection reason:</strong> {selectedCaptain.womenOnlyRejectionReason}
+                  </p>
+                )}
+                {selectedCaptain.womenOnlyStatus === 'APPLIED' && (
+                  <p className="text-[11px] text-purple-700">
+                    Captain has submitted self-declaration for the Women-Only Bike program and is awaiting review.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 disabled={isVerifying}
@@ -596,6 +681,86 @@ export const AdminDashboardPage: React.FC = () => {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs transition-colors"
               >
                 Approve Captain
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Women-Only Review Modal */}
+      {womenOnlyModalCaptain && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative space-y-4 animate-fadeIn">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
+                  DEMO VERIFICATION
+                </span>
+                <h3 className="text-xl font-black text-slate-900 mt-2">Women-Only Bike Eligibility</h3>
+                <p className="text-xs text-slate-500">{womenOnlyModalCaptain.user?.fullName} ({womenOnlyModalCaptain.user?.email})</p>
+              </div>
+              <button onClick={() => setWomenOnlyModalCaptain(null)} className="text-slate-400 hover:text-slate-600">
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Current Status:</span>
+                <span className="font-bold text-slate-900">{womenOnlyModalCaptain.womenOnlyStatus || 'NOT_APPLIED'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Currently Eligible:</span>
+                <span className="font-bold">{womenOnlyModalCaptain.womenOnlyEligible ? 'Yes' : 'No'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Vehicle:</span>
+                <span className="font-bold">{womenOnlyModalCaptain.vehicle?.model} ({womenOnlyModalCaptain.vehicle?.registrationNumber})</span>
+              </div>
+              {womenOnlyModalCaptain.womenOnlyRejectionReason && (
+                <div className="text-red-700 pt-1 border-t border-slate-200">
+                  <strong>Previous rejection:</strong> {womenOnlyModalCaptain.womenOnlyRejectionReason}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                Demo Self-Declaration Notice
+              </p>
+              <p className="text-[11px] mt-1 text-amber-700">
+                This verification workflow is a demo prototype. Approving grants this captain eligibility to receive and accept Women-Only ride requests.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-600 block mb-1">
+                Rejection Reason (if rejecting)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Ineligible vehicle or declaration criteria unmet"
+                value={womenOnlyRejectReason}
+                onChange={(e) => setWomenOnlyRejectReason(e.target.value)}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                disabled={isWomenOnlyVerifying}
+                onClick={() => handleVerifyWomenOnly(womenOnlyModalCaptain.id, 'REJECTED')}
+                className="border-2 border-red-500 text-red-600 hover:bg-red-50 font-bold py-2.5 rounded-xl text-xs transition-colors disabled:opacity-50"
+              >
+                Reject Eligibility
+              </button>
+              <button
+                disabled={isWomenOnlyVerifying}
+                onClick={() => handleVerifyWomenOnly(womenOnlyModalCaptain.id, 'APPROVED')}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-black py-2.5 rounded-xl text-xs transition-colors disabled:opacity-50"
+              >
+                Approve for Women-Only
               </button>
             </div>
           </div>

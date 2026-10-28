@@ -44,6 +44,20 @@ public class CaptainProfile {
     @Builder.Default
     private boolean available = false;
 
+    @Column(name = "women_only_eligible", nullable = false)
+    @Builder.Default
+    private boolean womenOnlyEligible = false;
+
+    @Column(name = "women_only_status", nullable = false, length = 20)
+    @Builder.Default
+    private String womenOnlyStatus = "NOT_APPLIED";
+
+    @Column(name = "women_only_declaration_date")
+    private LocalDateTime womenOnlyDeclarationDate;
+
+    @Column(name = "women_only_rejection_reason", columnDefinition = "TEXT")
+    private String womenOnlyRejectionReason;
+
     @Column(name = "current_latitude", precision = 10, scale = 7)
     private BigDecimal currentLatitude;
 

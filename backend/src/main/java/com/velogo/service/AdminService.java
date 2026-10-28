@@ -60,6 +60,9 @@ public class AdminService {
                     cp.getRejectionReason(),
                     cp.isOnline(),
                     cp.isAvailable(),
+                    cp.isWomenOnlyEligible(),
+                    cp.getWomenOnlyStatus(),
+                    cp.getWomenOnlyRejectionReason(),
                     cp.getRatingAvg(),
                     cp.getTotalRides(),
                     cp.getTotalEarnings(),
@@ -135,6 +138,40 @@ public class AdminService {
                 captain.getUser().getId(),
                 "Captain Account " + newStatus,
                 msg,
+                NotificationType.VERIFICATION
+        );
+
+        return saved;
+    }
+
+    @Transactional
+    public CaptainProfile verifyWomenOnlyCaptain(User admin, String captainId, String newStatus, String reason) {
+        CaptainProfile captain = captainRepository.findById(captainId)
+                .orElseThrow(() -> new ResourceNotFoundException("Captain profile not found with id: " + captainId));
+
+        if ("APPROVED".equalsIgnoreCase(newStatus)) {
+            captain.setWomenOnlyEligible(true);
+            captain.setWomenOnlyStatus("APPROVED");
+            captain.setWomenOnlyRejectionReason(null);
+        } else if ("REJECTED".equalsIgnoreCase(newStatus)) {
+            captain.setWomenOnlyEligible(false);
+            captain.setWomenOnlyStatus("REJECTED");
+            captain.setWomenOnlyRejectionReason(reason);
+        } else {
+            throw new BadRequestException("Invalid Women-Only verification status: " + newStatus);
+        }
+
+        CaptainProfile saved = captainRepository.save(captain);
+
+        // Audit log
+        recordAuditLog(admin, "VERIFY_WOMEN_ONLY_CAPTAIN", "CaptainProfile", captainId,
+                "Women-Only status changed to " + newStatus + (reason != null ? ". Reason: " + reason : ""));
+
+        // Notify captain
+        notificationService.sendNotification(
+                captain.getUser().getId(),
+                "Women-Only Bike Program Update",
+                "Your Women-Only application has been " + newStatus.toUpperCase() + (reason != null ? ". Reason: " + reason : "."),
                 NotificationType.VERIFICATION
         );
 

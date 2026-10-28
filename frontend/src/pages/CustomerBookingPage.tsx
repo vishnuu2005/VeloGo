@@ -21,6 +21,10 @@ import {
   Crosshair,
   AlertCircle,
   RefreshCw,
+  Users,
+  UserCheck,
+  ShieldCheck,
+  Info,
 } from 'lucide-react';
 
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
@@ -59,6 +63,14 @@ export const CustomerBookingPage: React.FC = () => {
   const [estimates, setEstimates] = useState<FareEstimateResponse | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<VehicleCategory>('BIKE');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('RAZORPAY');
+
+  // Women-Only Traveler State
+  const [isForSomeoneElse, setIsForSomeoneElse] = useState(false);
+  const [travelerName, setTravelerName] = useState('');
+  const [travelerPhone, setTravelerPhone] = useState('');
+  const [travelerRelationship, setTravelerRelationship] = useState('Sister');
+  const [travelerGender, setTravelerGender] = useState<'FEMALE' | 'MALE' | 'OTHER'>('FEMALE');
+  const [passengerDeclarationConfirmed, setPassengerDeclarationConfirmed] = useState(true);
 
   // Coupon
   const [couponCode, setCouponCode] = useState('');
@@ -123,7 +135,7 @@ export const CustomerBookingPage: React.FC = () => {
       }).catch(() => {});
     }
 
-    if (cat && ['BIKE', 'AUTO', 'CAB'].includes(cat)) {
+    if (cat && ['BIKE', 'AUTO', 'CAB', 'WOMEN_BIKE'].includes(cat)) {
       setSelectedCategory(cat);
     }
   }, [location.search]);
@@ -138,14 +150,14 @@ export const CustomerBookingPage: React.FC = () => {
             setActiveRide(ride);
             if (ride.pickupLat && ride.pickupLng) {
               setPickup({
-                address: ride.pickupAddress || 'Pickup Point',
+                address: ride.pickupAddress,
                 lat: ride.pickupLat,
                 lng: ride.pickupLng,
               });
             }
             if (ride.destLat && ride.destLng) {
               setDestination({
-                address: ride.destAddress || 'Destination',
+                address: ride.destAddress,
                 lat: ride.destLat,
                 lng: ride.destLng,
               });
@@ -311,6 +323,41 @@ export const CustomerBookingPage: React.FC = () => {
       return;
     }
 
+    // Women-Only client-side eligibility validation
+    if (selectedCategory === 'WOMEN_BIKE') {
+      if (!passengerDeclarationConfirmed) {
+        setErrorMessage('Please confirm the demo self-declaration before requesting a Women-Only ride.');
+        return;
+      }
+
+      if (isForSomeoneElse) {
+        if (!travelerName.trim()) {
+          setErrorMessage('Traveler full name is required when booking for someone else.');
+          return;
+        }
+        if (!travelerPhone.trim()) {
+          setErrorMessage('Traveler phone number is required when booking for someone else.');
+          return;
+        }
+        if (travelerGender !== 'FEMALE') {
+          setErrorMessage('Women-Only Bike bookings are reserved exclusively for female passengers. Designated traveler must be female.');
+          return;
+        }
+      } else {
+        if (user.gender === 'MALE') {
+          setErrorMessage('Women-Only Bike bookings are reserved exclusively for women passengers. To book on behalf of a female traveler, please select "Someone Else".');
+          return;
+        }
+      }
+
+      // Check captain availability for Women-Only Bike
+      const womenEstimate = estimates?.estimates.find((e) => e.category === 'WOMEN_BIKE');
+      if (womenEstimate && !womenEstimate.isAvailable) {
+        setErrorMessage('No verified Women-Only Bike captains are currently available in your pickup area. Please retry shortly or select standard Bike, Auto, or Cab.');
+        return;
+      }
+    }
+
     setIsBooking(true);
     setErrorMessage(null);
     try {
@@ -324,6 +371,12 @@ export const CustomerBookingPage: React.FC = () => {
         vehicleCategory: selectedCategory,
         paymentMethod,
         couponCode: appliedCoupon || undefined,
+        isForSomeoneElse,
+        travelerName: isForSomeoneElse ? travelerName.trim() : undefined,
+        travelerPhone: isForSomeoneElse ? travelerPhone.trim() : undefined,
+        travelerRelationship: isForSomeoneElse ? travelerRelationship : undefined,
+        travelerGender: isForSomeoneElse ? travelerGender : 'FEMALE',
+        passengerDeclarationAcknowledged: passengerDeclarationConfirmed,
       });
 
       setActiveRide(ride);
@@ -333,6 +386,9 @@ export const CustomerBookingPage: React.FC = () => {
       setIsBooking(false);
     }
   };
+
+  const selectedCategoryEstimate = estimates?.estimates?.find((e) => e.category === selectedCategory);
+  const isSelectedCategoryUnavailable = selectedCategory === 'WOMEN_BIKE' && selectedCategoryEstimate && !selectedCategoryEstimate.isAvailable;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -359,43 +415,52 @@ export const CustomerBookingPage: React.FC = () => {
                     }
                   : destination
               }
-              routeGeometry={estimates?.routeGeometry}
-              routeDistanceKm={activeRide ? activeRide.distanceKm : estimates?.distanceKm}
-              routeDurationMins={activeRide ? activeRide.durationMinutes : estimates?.durationMinutes}
               captainLocation={captainLocation}
               currentLocation={currentLocation}
-              selectionMode={activeRide ? null : selectionMode}
-              onSelectionModeChange={activeRide ? undefined : setSelectionMode}
-              onMapClick={activeRide ? undefined : handleMapClick}
-              onPickupChange={activeRide ? undefined : handleMapPickupChange}
-              onDestinationChange={activeRide ? undefined : handleMapDestChange}
-              onLocateUser={handleLocateUser}
-              isLocating={isLocating}
-              interactiveSelectionPopup={!activeRide}
-              showPinControls={!activeRide}
-              className="h-full w-full rounded-2xl"
+              routeGeometry={estimates?.routeGeometry}
+              onPickupChange={handleMapPickupChange}
+              onDestinationChange={handleMapDestChange}
+              onMapClick={handleMapClick}
+              selectionMode={selectionMode}
             />
+
+            {/* Instruction tooltip when in pinning mode */}
+            {selectionMode && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/95 backdrop-blur text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-bold border border-slate-700/50 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-brand-400 animate-bounce" />
+                <span>
+                  Click anywhere on the map or drag pins to position your {selectionMode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectionMode(null)}
+                  className="ml-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded-lg text-[10px]"
+                >
+                  Done
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Quick presets bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Popular Spots:
+          {/* Preset location chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <span className="text-slate-400 font-bold flex items-center gap-1 text-[11px] whitespace-nowrap pl-1">
+              Popular:
             </span>
-            {PRESET_LOCATIONS.map((spot) => (
+            {PRESET_LOCATIONS.map((loc) => (
               <button
-                key={spot.name}
                 type="button"
-                onClick={() =>
+                key={loc.name}
+                onClick={() => {
                   setDestination({
-                    lat: spot.lat,
-                    lng: spot.lng,
-                    address: spot.name + ', Bengaluru',
-                  })
-                }
-                className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-brand-100 hover:text-brand-900 text-slate-700 transition-colors"
+                    address: `${loc.name}, Bengaluru`,
+                    lat: loc.lat,
+                    lng: loc.lng,
+                  });
+                }}
+                className="bg-white hover:bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs whitespace-nowrap text-[11px] transition-colors"
               >
-                {spot.name}
+                📍 {loc.name}
               </button>
             ))}
           </div>
@@ -532,6 +597,162 @@ export const CustomerBookingPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Women-Only Passenger Eligibility & Traveler Selection */}
+              {selectedCategory === 'WOMEN_BIKE' && (
+                <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-3.5 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-purple-700" />
+                      <h4 className="text-xs font-black text-purple-950 uppercase tracking-wider">
+                        Women-Only Traveler Verification
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-800">
+                      Demo Self-Declaration
+                    </span>
+                  </div>
+
+                  {/* Who is traveling toggle */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1.5">Who is Traveling?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsForSomeoneElse(false)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          !isForSomeoneElse
+                            ? 'border-purple-600 bg-white text-purple-900 shadow-sm ring-2 ring-purple-400/20'
+                            : 'border-purple-200 bg-purple-100/40 text-slate-600 hover:bg-white'
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5" /> For Myself
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsForSomeoneElse(true)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          isForSomeoneElse
+                            ? 'border-purple-600 bg-white text-purple-900 shadow-sm ring-2 ring-purple-400/20'
+                            : 'border-purple-200 bg-purple-100/40 text-slate-600 hover:bg-white'
+                        }`}
+                      >
+                        <Users className="w-3.5 h-3.5" /> Book for Someone Else
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Details for Myself */}
+                  {!isForSomeoneElse && (
+                    <div className="p-3 bg-white rounded-xl border border-purple-100 text-xs space-y-2">
+                      <p className="font-semibold text-slate-800">
+                        Passenger: <span className="font-bold text-slate-950">{user?.fullName || 'Current User'}</span> ({user?.phone || 'Account Phone'})
+                      </p>
+                      {user?.gender === 'MALE' ? (
+                        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] leading-relaxed">
+                          ⚠️ <strong>Eligibility Notice:</strong> Your account is registered as Male. Women-Only Bike rides are exclusively reserved for women travelers. If you are booking for a wife, mother, sister, daughter, or female companion, please select <strong>'Book for Someone Else'</strong> above, or select standard Bike/Auto/Cab for yourself.
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-purple-800 flex items-center gap-1 font-medium">
+                          <span>✓</span> Self-declaration: Eligible female traveler for Women-Only service.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Details for Someone Else */}
+                  {isForSomeoneElse && (
+                    <div className="space-y-3 p-3 bg-white rounded-xl border border-purple-100 text-xs">
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Enter traveler contact details so the captain can coordinate pickup directly.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Traveler Full Name *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Sunita Sharma"
+                            value={travelerName}
+                            onChange={(e) => setTravelerName(e.target.value)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-1 focus:ring-purple-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Traveler Phone *</label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="+91 98765 43210"
+                            value={travelerPhone}
+                            onChange={(e) => setTravelerPhone(e.target.value)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-1 focus:ring-purple-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Relationship to Traveler *</label>
+                          <select
+                            value={travelerRelationship}
+                            onChange={(e) => setTravelerRelationship(e.target.value)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold bg-white focus:ring-1 focus:ring-purple-500"
+                          >
+                            <option value="Wife">Wife</option>
+                            <option value="Mother">Mother</option>
+                            <option value="Sister">Sister</option>
+                            <option value="Daughter">Daughter</option>
+                            <option value="Friend">Friend</option>
+                            <option value="Other">Other Relative / Companion</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-1">Traveler Gender *</label>
+                          <select
+                            value={travelerGender}
+                            onChange={(e) => setTravelerGender(e.target.value as any)}
+                            className="w-full p-2 rounded-lg border border-slate-200 text-xs font-semibold bg-white focus:ring-1 focus:ring-purple-500"
+                          >
+                            <option value="FEMALE">Female (Eligible)</option>
+                            <option value="MALE">Male (Ineligible)</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {travelerGender !== 'FEMALE' && (
+                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-[11px]">
+                          ⚠️ Women-Only Bike bookings are reserved exclusively for women passengers. Please select Female or switch to standard Bike, Auto, or Cab.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Demo disclaimer notice */}
+                  <div className="pt-1">
+                    <label className="flex items-start gap-2 text-[11px] text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={passengerDeclarationConfirmed}
+                        onChange={(e) => setPassengerDeclarationConfirmed(e.target.checked)}
+                        className="mt-0.5 rounded text-purple-600 focus:ring-purple-500"
+                      />
+                      <span>
+                        <strong>Demo Verification Acknowledgment:</strong> I declare that the actual traveler boarding this ride is a female passenger. I understand this is a simulation prototype for demo/testing only and does not represent official biometric or legal identity proof.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Captain availability alert if 0 captains */}
+                  {isSelectedCategoryUnavailable && (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                      <span>No verified Women-Only Bike captains are currently available nearby. We will never assign a standard captain silently. Please retry shortly or choose another category.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Coupon / Promo code */}
               <div>
                 <form onSubmit={handleApplyCoupon} className="flex gap-2">
@@ -596,11 +817,15 @@ export const CustomerBookingPage: React.FC = () => {
               {/* Book Ride Action */}
               <button
                 type="button"
-                disabled={isBooking || !estimates}
+                disabled={isBooking || !estimates || isSelectedCategoryUnavailable}
                 onClick={handleBookRide}
-                className="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50"
+                className={`w-full font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50 ${
+                  selectedCategory === 'WOMEN_BIKE'
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-200'
+                    : 'bg-brand-500 hover:bg-brand-600 text-slate-950'
+                }`}
               >
-                {isBooking ? 'Dispatching Request...' : 'Confirm & Request Captain'}
+                {isBooking ? 'Dispatching Request...' : isSelectedCategoryUnavailable ? 'No Women-Only Captains Nearby' : 'Confirm & Request Captain'}
                 <ArrowRight className="w-5 h-5" />
               </button>
             </div>

@@ -15,9 +15,11 @@ import {
   Navigation,
   Power,
   Shield,
+  ShieldCheck,
   Star,
   XCircle,
   AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { MapViewer } from '../components/MapViewer';
 
@@ -37,6 +39,12 @@ export const CaptainDashboardPage: React.FC = () => {
   const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  // Women-Only application modal
+  const [showWomenOnlyModal, setShowWomenOnlyModal] = useState(false);
+  const [womenOnlyAcknowledged, setWomenOnlyAcknowledged] = useState(false);
+  const [isApplyingWomenOnly, setIsApplyingWomenOnly] = useState(false);
+  const [womenOnlyFeedback, setWomenOnlyFeedback] = useState<string | null>(null);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSimulatingLoc, setIsSimulatingLoc] = useState(false);
@@ -103,16 +111,16 @@ export const CaptainDashboardPage: React.FC = () => {
     return () => unsub();
   }, [activeRide?.id]);
 
-  // Toggle online / offline
+  // Toggle online / offline status
   const handleToggleOnline = async () => {
     if (!profile) return;
     setIsUpdatingStatus(true);
     try {
-      const updated = await api.captain.toggleAvailability(!profile.online);
+      const nextOnline = !profile.online;
+      const updated = await api.captain.toggleAvailability(nextOnline);
       setProfile(updated);
-      await refreshProfile();
     } catch (err: any) {
-      alert(err.message || 'Failed to toggle availability');
+      alert(err.message || 'Failed to update online status');
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -127,17 +135,17 @@ export const CaptainDashboardPage: React.FC = () => {
       setIncomingDispatch(null);
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to accept ride');
+      alert(err.message || 'Ride was taken or expired');
       setIncomingDispatch(null);
     }
   };
 
-  // Reject dispatch
+  // Reject incoming dispatch
   const handleRejectDispatch = () => {
     setIncomingDispatch(null);
   };
 
-  // Arrive at pickup
+  // Captain marks arrival at pickup
   const handleArrive = async () => {
     if (!activeRide) return;
     try {
@@ -197,13 +205,37 @@ export const CaptainDashboardPage: React.FC = () => {
     setIsSimulatingLoc(false);
   };
 
+  // Handle Women-Only program application
+  const handleApplyWomenOnly = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!womenOnlyAcknowledged) {
+      alert('Please confirm the demo self-declaration checkbox.');
+      return;
+    }
+
+    setIsApplyingWomenOnly(true);
+    setWomenOnlyFeedback(null);
+    try {
+      const updated = await api.captain.applyWomenOnly(true);
+      setProfile(updated);
+      setShowWomenOnlyModal(false);
+      setWomenOnlyFeedback('Application submitted successfully! Your application is pending admin approval.');
+    } catch (err: any) {
+      alert(err.message || 'Application failed');
+    } finally {
+      setIsApplyingWomenOnly(false);
+    }
+  };
+
+  const isBikeCaptain = profile?.vehicle?.category === 'BIKE' || profile?.vehicle?.category === 'WOMEN_BIKE';
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Header bar */}
       <div className="bg-navy-900 text-white rounded-3xl p-6 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-brand-400 text-slate-950 flex items-center justify-center font-black shadow-glow">
-            {profile?.vehicle?.category === 'BIKE' ? (
+            {profile?.vehicle?.category === 'BIKE' || profile?.vehicle?.category === 'WOMEN_BIKE' ? (
               <Bike className="w-8 h-8" />
             ) : (
               <Car className="w-8 h-8" />
@@ -221,6 +253,11 @@ export const CaptainDashboardPage: React.FC = () => {
               >
                 {profile?.verificationStatus}
               </span>
+              {profile?.womenOnlyEligible && (
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" /> Women-Only Approved
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               {profile?.vehicle?.model} &bull; {profile?.vehicle?.registrationNumber} ({profile?.vehicle?.category})
@@ -252,6 +289,13 @@ export const CaptainDashboardPage: React.FC = () => {
         </div>
       )}
 
+      {womenOnlyFeedback && (
+        <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl flex items-center gap-3 text-purple-900 text-xs font-semibold">
+          <ShieldCheck className="w-5 h-5 text-purple-600 flex-shrink-0" />
+          <span>{womenOnlyFeedback}</span>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
@@ -275,28 +319,119 @@ export const CaptainDashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Women-Only Bike Program Enrollment Card (for Bike Captains) */}
+      {isBikeCaptain && (
+        <div className="bg-purple-50/60 rounded-3xl p-6 border border-purple-200 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-purple-950">Women-Only Bike Service Program</h3>
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                    profile?.womenOnlyStatus === 'APPROVED'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : profile?.womenOnlyStatus === 'APPLIED'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : profile?.womenOnlyStatus === 'REJECTED'
+                      ? 'bg-red-100 text-red-800 border border-red-300'
+                      : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {profile?.womenOnlyStatus === 'APPROVED'
+                      ? 'Approved & Eligible'
+                      : profile?.womenOnlyStatus === 'APPLIED'
+                      ? 'Application Under Review'
+                      : profile?.womenOnlyStatus === 'REJECTED'
+                      ? 'Application Rejected'
+                      : 'Not Applied'}
+                  </span>
+                </div>
+                <p className="text-xs text-purple-800/80 mt-0.5">
+                  Exclusive trips reserved for women passengers with verified female captains.
+                </p>
+              </div>
+            </div>
+
+            {/* Application action button */}
+            {(!profile?.womenOnlyStatus || profile?.womenOnlyStatus === 'NOT_APPLIED' || profile?.womenOnlyStatus === 'REJECTED') && (
+              <button
+                type="button"
+                onClick={() => setShowWomenOnlyModal(true)}
+                className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-5 py-3 rounded-xl transition-all shadow-sm whitespace-nowrap"
+              >
+                Apply for Women-Only Program
+              </button>
+            )}
+
+            {profile?.womenOnlyStatus === 'APPLIED' && (
+              <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-200">
+                ⏳ Pending Admin Review
+              </span>
+            )}
+
+            {profile?.womenOnlyStatus === 'APPROVED' && (
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Dispatches Enabled
+              </span>
+            )}
+          </div>
+
+          <div className="p-3 bg-white/70 rounded-xl border border-purple-100 text-[11px] text-purple-900 space-y-1">
+            <p className="font-semibold flex items-center gap-1">
+              <Info className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
+              <span><strong>Demo Verification Notice:</strong> Program eligibility is granted exclusively via administrator review of demo self-declarations. Submission does not auto-grant eligibility.</span>
+            </p>
+            {profile?.womenOnlyRejectionReason && (
+              <p className="text-red-700 font-semibold pt-1">
+                Rejection Note: {profile.womenOnlyRejectionReason}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Active Trip Execution Console */}
       {activeRide ? (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-brand-500 space-y-6">
+        <div className={`bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 space-y-6 ${
+          activeRide.vehicleCategory === 'WOMEN_BIKE' ? 'border-purple-500' : 'border-brand-500'
+        }`}>
           <div className="flex items-center justify-between pb-4 border-b border-slate-200">
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider bg-brand-500 text-slate-950 px-2.5 py-1 rounded-full">
-                ACTIVE TRIP IN PROGRESS
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                  activeRide.vehicleCategory === 'WOMEN_BIKE'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-brand-500 text-slate-950'
+                }`}>
+                  {activeRide.vehicleCategory === 'WOMEN_BIKE' ? 'WOMEN-ONLY BIKE TRIP' : 'ACTIVE TRIP IN PROGRESS'}
+                </span>
+                {activeRide.isForSomeoneElse && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                    Booked for Relative / Friend
+                  </span>
+                )}
+              </div>
               <h3 className="text-xl font-extrabold text-slate-900 mt-2">
-                Passenger: {activeRide.customerName}
+                {activeRide.isForSomeoneElse
+                  ? `Traveler: ${activeRide.travelerName || 'Passenger'} (${activeRide.travelerRelationship || 'Traveler'})`
+                  : `Passenger: ${activeRide.customerName}`}
               </h3>
-              <p className="text-xs text-slate-500">{activeRide.customerPhone}</p>
+              <p className="text-xs text-slate-500">
+                Contact: {activeRide.isForSomeoneElse && activeRide.travelerPhone ? activeRide.travelerPhone : activeRide.customerPhone}
+                {activeRide.isForSomeoneElse && ` (Booked by ${activeRide.customerName})`}
+              </p>
             </div>
             <div className="text-right">
               <span className="text-xs font-bold text-slate-400 uppercase">Fare Amount</span>
               <p className="text-2xl font-black text-slate-900">
                 ₹{(activeRide.finalFare || activeRide.estimatedFare).toFixed(2)}
               </p>
-          </div>
+            </div>
           </div>
 
-          {/* Active Trip Route Map with Highlighted Travel Path */}
+          {/* Active Trip Route Map */}
           <div className="rounded-2xl overflow-hidden border border-slate-200 h-[280px] sm:h-[340px] shadow-inner relative">
             <MapViewer
               pickup={{
@@ -356,97 +491,78 @@ export const CaptainDashboardPage: React.FC = () => {
                 onClick={() => setShowOtpDialog(true)}
                 className="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-black py-4 rounded-2xl text-base shadow-glow flex items-center justify-center gap-2 transition-all"
               >
-                <Key className="w-5 h-5" /> Enter Customer OTP to Start Trip
+                <Key className="w-5 h-5 stroke-[2.5]" />
+                Verify Customer OTP & Start Trip
               </button>
             )}
 
             {activeRide.status === 'IN_PROGRESS' && (
               <div className="space-y-3">
                 <button
+                  onClick={handleSimulateGPS}
+                  disabled={isSimulatingLoc}
+                  className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
+                >
+                  <Navigation className="w-4 h-4 animate-spin" />
+                  {isSimulatingLoc ? 'Broadcasting simulated GPS navigation...' : 'Simulate GPS Navigation Movement'}
+                </button>
+                <button
                   onClick={handleComplete}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl text-base shadow-lg transition-all"
                 >
-                  Complete Trip & Collect Fare
-                </button>
-                <button
-                  disabled={isSimulatingLoc}
-                  onClick={handleSimulateGPS}
-                  className="w-full border-2 border-brand-500 text-brand-800 font-bold py-2.5 rounded-xl text-xs hover:bg-brand-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Navigation className="w-4 h-4 text-brand-600" />
-                  {isSimulatingLoc ? 'Simulating GPS Driving...' : 'Simulate GPS Movement on Customer Map'}
+                  Complete Trip at Destination
                 </button>
               </div>
             )}
           </div>
         </div>
       ) : (
-        /* Empty State */
-        <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
-            <Compass className="w-8 h-8" />
+        /* Standby state */
+        <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <Navigation className="w-8 h-8" />
           </div>
-          <h3 className="font-extrabold text-lg text-slate-900">
-            {profile?.online ? 'Looking for trip requests...' : 'You are currently Offline'}
-          </h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {profile?.online
-              ? 'Stay on this screen. When a passenger books a ride in your area, an incoming dispatch alert with 45s timer will appear here.'
-              : 'Turn on your availability above to start receiving ride requests.'}
-          </p>
+          <div>
+            <h3 className="text-lg font-black text-slate-900">
+              {profile?.online ? 'Waiting for Nearby Dispatch Offers' : 'You are currently Offline'}
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+              {profile?.online
+                ? 'Keep this window open. When a customer nearby requests a ride matching your vehicle, you will see a live 45-second offer countdown.'
+                : 'Tap "Go Online" above to start receiving ride dispatches in your area.'}
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Ride History */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-        <h3 className="font-extrabold text-base text-slate-900">Recent Completed Trips</h3>
-        {history.length === 0 ? (
-          <p className="text-xs text-slate-400 py-4 text-center">No completed trips yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {history.slice(0, 5).map((r) => (
-              <div
-                key={r.id}
-                className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
-              >
-                <div>
-                  <p className="font-bold text-slate-900">{r.customerName}</p>
-                  <p className="text-slate-500 text-[11px] mt-0.5 truncate max-w-xs">
-                    {r.pickupAddress} &rarr; {r.destAddress}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-black text-slate-900">₹{(r.finalFare || r.estimatedFare).toFixed(2)}</p>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                    {r.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Incoming Ride Dispatch Modal */}
+      {/* Incoming Dispatch Modal (45s live countdown) */}
       {incomingDispatch && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative border-4 border-brand-500 animate-fadeIn">
-            {/* Countdown Badge */}
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-black uppercase tracking-wider bg-brand-500 text-slate-950 px-3 py-1 rounded-full">
-                NEW RIDE OFFER
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border-4 border-brand-500 animate-fadeIn relative">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                incomingDispatch.category === 'WOMEN_BIKE'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-brand-500 text-slate-950'
+              }`}>
+                {incomingDispatch.category === 'WOMEN_BIKE' ? '🛡️ WOMEN-ONLY RIDE' : 'NEW RIDE DISPATCH'}
               </span>
-              <div className="flex items-center gap-1 font-mono text-sm font-black text-red-600 bg-red-50 px-3 py-1 rounded-lg border border-red-200">
-                <Clock className="w-4 h-4" /> {countdown}s
+              <div className="flex items-center gap-1.5 font-mono text-sm font-extrabold text-red-600 bg-red-50 px-2.5 py-1 rounded-lg">
+                <Clock className="w-4 h-4 animate-spin" />
+                <span>{countdown}s left</span>
               </div>
             </div>
 
-            <div className="text-center py-2">
-              <p className="text-xs font-bold text-slate-400 uppercase">Estimated Trip Fare</p>
-              <p className="text-4xl font-black text-slate-950 my-1">
+            {/* Fare & Passenger */}
+            <div className="text-center my-4">
+              <p className="text-3xl font-black text-slate-900">
                 ₹{Number(incomingDispatch.estimatedFare).toFixed(2)}
               </p>
-              <p className="text-xs text-slate-500 font-semibold">
+              <p className="text-xs font-bold text-slate-600 mt-1">
+                {incomingDispatch.customerName}
+              </p>
+              <p className="text-[11px] text-slate-400">
                 {incomingDispatch.distanceKm} km &bull; ~{incomingDispatch.durationMinutes} mins
               </p>
             </div>
@@ -519,6 +635,64 @@ export const CaptainDashboardPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowOtpDialog(false)}
+                  className="px-4 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Women-Only Program Application Modal */}
+      {showWomenOnlyModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative animate-fadeIn space-y-4">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Women-Only Bike Service Application</h3>
+              <p className="text-xs text-slate-500">
+                Join our certified women captain fleet to serve dedicated women commuters.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 text-xs text-purple-900 space-y-2">
+              <p className="font-bold">Demo Verification & Self-Declaration Terms:</p>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] text-purple-800">
+                <li>This application initiates an administrator review.</li>
+                <li>Application submission does not automatically grant eligibility.</li>
+                <li>This is a prototype demo self-declaration workflow and does not claim to represent government ID or biological proof.</li>
+              </ul>
+            </div>
+
+            <form onSubmit={handleApplyWomenOnly} className="space-y-4">
+              <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  required
+                  checked={womenOnlyAcknowledged}
+                  onChange={(e) => setWomenOnlyAcknowledged(e.target.checked)}
+                  className="mt-0.5 rounded text-purple-600 focus:ring-purple-500"
+                />
+                <span>
+                  I self-declare my eligibility as a female captain with a verified two-wheeler and request administrator approval for the Women-Only Bike program.
+                </span>
+              </label>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={isApplyingWomenOnly || !womenOnlyAcknowledged}
+                  className="flex-1 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-black py-3 rounded-xl shadow-md text-sm transition-all"
+                >
+                  {isApplyingWomenOnly ? 'Submitting...' : 'Submit Application'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowWomenOnlyModal(false)}
                   className="px-4 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs"
                 >
                   Cancel

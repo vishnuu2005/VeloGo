@@ -86,6 +86,17 @@ public class AdminController {
         return ResponseEntity.ok(adminService.verifyCaptain(admin, captainId, req.status(), req.reason()));
     }
 
+    @PatchMapping("/captains/{captainId}/women-only")
+    @Operation(summary = "Approve or reject captain Women-Only Bike eligibility")
+    public ResponseEntity<CaptainProfile> verifyWomenOnly(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable String captainId,
+            @Valid @RequestBody AdminDtos.VerifyWomenOnlyActionRequest req
+    ) {
+        User admin = userRepository.findById(userDetails.getId()).orElseThrow();
+        return ResponseEntity.ok(adminService.verifyWomenOnlyCaptain(admin, captainId, req.status(), req.reason()));
+    }
+
     @GetMapping("/rides")
     @Operation(summary = "List all platform rides with detailed statuses")
     public ResponseEntity<Page<RideDtos.RideDto>> getAllRides(

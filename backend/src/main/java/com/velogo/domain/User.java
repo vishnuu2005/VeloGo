@@ -43,6 +43,10 @@ public class User {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
+    @Column(length = 20)
+    @Builder.Default
+    private String gender = "UNSPECIFIED";
+
     @Column(length = 100)
     private String department;
 

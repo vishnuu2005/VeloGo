@@ -61,7 +61,13 @@ public class RideDtos {
             @NotBlank String destAddress,
             @NotNull VehicleCategory vehicleCategory,
             @NotNull PaymentMethod paymentMethod,
-            String couponCode
+            String couponCode,
+            Boolean isForSomeoneElse,
+            String travelerName,
+            String travelerPhone,
+            String travelerRelationship,
+            String travelerGender,
+            Boolean passengerDeclarationAcknowledged
     ) {}
 
     public record CancelRideRequest(
@@ -104,6 +110,12 @@ public class RideDtos {
             BigDecimal captainCurrentLng,
             String cancellationReason,
             String cancelledBy,
+            Boolean isForSomeoneElse,
+            String travelerName,
+            String travelerPhone,
+            String travelerRelationship,
+            String travelerGender,
+            Boolean passengerDeclarationAcknowledged,
             String createdAt,
             String acceptedAt,
             String startedAt,

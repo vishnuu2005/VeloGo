@@ -118,6 +118,16 @@ public class FareCalculationService {
                     .taxRatePercent(new BigDecimal("5.00"))
                     .active(true)
                     .build();
+            case WOMEN_BIKE -> FareConfiguration.builder()
+                    .category(VehicleCategory.WOMEN_BIKE)
+                    .baseFare(new BigDecimal("25.00"))
+                    .minFare(new BigDecimal("35.00"))
+                    .perKmRate(new BigDecimal("9.00"))
+                    .perMinRate(new BigDecimal("1.50"))
+                    .bookingFee(new BigDecimal("5.00"))
+                    .taxRatePercent(new BigDecimal("5.00"))
+                    .active(true)
+                    .build();
             case AUTO -> FareConfiguration.builder()
                     .category(VehicleCategory.AUTO)
                     .baseFare(new BigDecimal("35.00"))
