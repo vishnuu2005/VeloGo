@@ -6,11 +6,11 @@ import com.velogo.domain.enums.VehicleCategory;
 import com.velogo.domain.enums.VerificationStatus;
 import com.velogo.dto.AdminDtos;
 import com.velogo.dto.RideDtos;
-import com.velogo.exception.ResourceNotFoundException;
-import com.velogo.repository.*;
+import com.velogo.repository.CouponRepository;
+import com.velogo.repository.FareConfigurationRepository;
+import com.velogo.repository.UserRepository;
 import com.velogo.security.CustomUserDetails;
 import com.velogo.service.AdminService;
-import com.velogo.service.RideService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -32,12 +32,8 @@ public class AdminController {
 
     private final AdminService adminService;
     private final UserRepository userRepository;
-    private final CaptainProfileRepository captainRepository;
-    private final RideRepository rideRepository;
     private final FareConfigurationRepository fareConfigRepository;
     private final CouponRepository couponRepository;
-    private final AdminAuditLogRepository auditLogRepository;
-    private final RideService rideService;
 
     @GetMapping("/overview")
     @Operation(summary = "Get high-level platform metrics and financial breakdown")
@@ -103,8 +99,7 @@ public class AdminController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        Page<Ride> rides = rideRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
-        return ResponseEntity.ok(rides.map(rideService::toRideDto));
+        return ResponseEntity.ok(adminService.getAllRides(PageRequest.of(page, size)));
     }
 
     @GetMapping("/pricing")
@@ -146,6 +141,6 @@ public class AdminController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size
     ) {
-        return ResponseEntity.ok(auditLogRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size)));
+        return ResponseEntity.ok(adminService.getAuditLogs(PageRequest.of(page, size)));
     }
 }

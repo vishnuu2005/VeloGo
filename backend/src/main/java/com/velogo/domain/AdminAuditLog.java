@@ -1,5 +1,6 @@
 package com.velogo.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -18,6 +19,7 @@ public class AdminAuditLog {
     @Column(length = 36)
     private String id;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "admin_id", nullable = false)
     private User admin;
@@ -39,6 +41,9 @@ public class AdminAuditLog {
 
     @PrePersist
     public void onPrePersist() {
+        if (this.id == null) {
+            this.id = java.util.UUID.randomUUID().toString();
+        }
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
         }

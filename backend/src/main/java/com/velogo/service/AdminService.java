@@ -7,6 +7,7 @@ import com.velogo.domain.enums.Role;
 import com.velogo.domain.enums.VehicleCategory;
 import com.velogo.domain.enums.VerificationStatus;
 import com.velogo.dto.AdminDtos;
+import com.velogo.dto.RideDtos;
 import com.velogo.exception.BadRequestException;
 import com.velogo.exception.ResourceNotFoundException;
 import com.velogo.repository.*;
@@ -37,6 +38,7 @@ public class AdminService {
     private final AdminAuditLogRepository auditLogRepository;
     private final NotificationService notificationService;
     private final VehicleRepository vehicleRepository;
+    private final RideService rideService;
 
     @Transactional(readOnly = true)
     public Page<AdminDtos.CaptainAdminDto> getCaptains(VerificationStatus status, Pageable pageable) {
@@ -110,6 +112,17 @@ public class AdminService {
                 totalPayments,
                 recentDtos
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RideDtos.RideDto> getAllRides(Pageable pageable) {
+        Page<Ride> rides = rideRepository.findAllByOrderByCreatedAtDesc(pageable);
+        return rides.map(rideService::toRideDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminAuditLog> getAuditLogs(Pageable pageable) {
+        return auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
     @Transactional

@@ -60,7 +60,7 @@ export const AdminDashboardPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ov, capRes, rRes, pr, cpn, aud] = await Promise.all([
+      const [ovRes, capRes, rRes, prRes, cpnRes, audRes] = await Promise.allSettled([
         api.admin.getOverview(),
         api.admin.getCaptains(),
         api.admin.getAllRides(),
@@ -68,14 +68,14 @@ export const AdminDashboardPage: React.FC = () => {
         api.admin.getCoupons(),
         api.admin.getAuditLogs(),
       ]);
-      setOverview(ov);
-      setCaptains(capRes.content || []);
-      setRides(rRes.content || []);
-      setPricing(pr);
-      setCoupons(cpn);
-      setAuditLogs(aud.content || []);
+      if (ovRes.status === 'fulfilled') setOverview(ovRes.value);
+      if (capRes.status === 'fulfilled') setCaptains(capRes.value?.content || []);
+      if (rRes.status === 'fulfilled') setRides(rRes.value?.content || []);
+      if (prRes.status === 'fulfilled') setPricing(prRes.value || []);
+      if (cpnRes.status === 'fulfilled') setCoupons(cpnRes.value || []);
+      if (audRes.status === 'fulfilled') setAuditLogs(audRes.value?.content || []);
     } catch (e) {
-      console.error(e);
+      console.error('Error loading admin dashboard data:', e);
     } finally {
       setLoading(false);
     }
@@ -202,7 +202,8 @@ export const AdminDashboardPage: React.FC = () => {
       </div>
 
       {/* TAB 1: METRICS OVERVIEW */}
-      {activeTab === 'overview' && overview && (
+      {activeTab === 'overview' && (
+        overview ? (
         <div className="space-y-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -251,7 +252,14 @@ export const AdminDashboardPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {overview.recentRides.map((r) => (
+                  {(!overview.recentRides || overview.recentRides.length === 0) ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                        No recent rides found.
+                      </td>
+                    </tr>
+                  ) : (
+                    overview.recentRides.map((r) => (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td className="py-3 font-mono font-bold text-slate-700">#{r.id.slice(0, 8)}</td>
                       <td className="py-3 font-bold text-slate-900">{r.customerName}</td>
@@ -264,12 +272,24 @@ export const AdminDashboardPage: React.FC = () => {
                       </td>
                       <td className="py-3 font-bold text-slate-900">₹{Number(r.fare).toFixed(2)}</td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
+        ) : (
+          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-500">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center space-y-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-brand-500" />
+                <p className="font-semibold text-sm">Loading platform metrics...</p>
+              </div>
+            ) : (
+              <p className="font-semibold text-sm">Platform metrics currently unavailable.</p>
+            )}
+          </div>
+        )
       )}
 
       {/* TAB 2: CAPTAIN APPROVALS */}
@@ -293,7 +313,14 @@ export const AdminDashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {captains.map((c) => (
+                {captains.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                      No captain registrations found.
+                    </td>
+                  </tr>
+                ) : (
+                  captains.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50">
                     <td className="py-3.5">
                       <p className="font-bold text-slate-900">{c.user?.fullName}</p>
@@ -367,7 +394,7 @@ export const AdminDashboardPage: React.FC = () => {
                       </button>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
@@ -392,7 +419,14 @@ export const AdminDashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rides.map((r) => (
+                {rides.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                      No platform rides found.
+                    </td>
+                  </tr>
+                ) : (
+                  rides.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <td className="py-3 font-mono font-bold text-slate-800">#{r.id.slice(0, 8)}</td>
                     <td className="py-3 font-bold text-slate-900">{r.customerName}</td>
@@ -412,7 +446,7 @@ export const AdminDashboardPage: React.FC = () => {
                       {r.paymentStatus} ({r.paymentMethod})
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
@@ -430,7 +464,12 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {pricing.map((p) => (
+            {pricing.length === 0 ? (
+              <div className="col-span-3 text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+                No fare configurations found.
+              </div>
+            ) : (
+              pricing.map((p) => (
               <div key={p.id} className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <h4 className="font-black text-lg text-slate-900">{p.category} TAXI</h4>
@@ -478,7 +517,7 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
       )}
@@ -546,7 +585,12 @@ export const AdminDashboardPage: React.FC = () => {
           <div className="md:col-span-7 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
             <h3 className="font-extrabold text-base text-slate-900">Active Coupons</h3>
             <div className="space-y-3">
-              {coupons.map((cpn) => (
+              {coupons.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+                  No promotional coupons created yet.
+                </div>
+              ) : (
+                coupons.map((cpn) => (
                 <div
                   key={cpn.id}
                   className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
@@ -565,7 +609,7 @@ export const AdminDashboardPage: React.FC = () => {
                     <p className="text-[10px] text-slate-400">Up to ₹{cpn.maxDiscount}</p>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
         </div>
@@ -586,7 +630,14 @@ export const AdminDashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {auditLogs.map((log) => (
+                {auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400">
+                      No audit events logged yet.
+                    </td>
+                  </tr>
+                ) : (
+                  auditLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50">
                     <td className="py-3 font-bold text-slate-900">{log.action}</td>
                     <td className="py-3 font-mono text-slate-600">
@@ -595,7 +646,7 @@ export const AdminDashboardPage: React.FC = () => {
                     <td className="py-3 text-slate-600">{log.details}</td>
                     <td className="py-3 text-slate-400 text-[11px]">{log.createdAt}</td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>

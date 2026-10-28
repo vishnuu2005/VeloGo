@@ -31,7 +31,7 @@ public class RideController {
         return ResponseEntity.ok(rideService.estimateFares(req));
     }
 
-    @PostMapping
+    @PostMapping({"", "/book"})
     @Operation(summary = "Book a new ride and initiate captain matching")
     public ResponseEntity<RideDtos.RideDto> bookRide(
             @AuthenticationPrincipal CustomUserDetails userDetails,

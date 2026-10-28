@@ -63,7 +63,7 @@ class WomenOnlyBikeServiceTest {
         captainService = new CaptainService(captainRepository, rideRepository, eventPublisher, notificationService);
         adminService = new AdminService(
                 null, captainRepository, rideRepository, paymentRepository,
-                null, null, auditLogRepository, notificationService, null
+                null, null, auditLogRepository, notificationService, null, null
         );
 
         femaleCustomer = User.builder()
