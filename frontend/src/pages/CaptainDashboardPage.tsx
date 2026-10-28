@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { api } from '../services/api';
 import { CaptainSummary, Ride } from '../types';
-import { MapViewer } from '../components/MapViewer';
 import {
   Bike,
   Car,
@@ -20,6 +19,7 @@ import {
   XCircle,
   AlertTriangle,
 } from 'lucide-react';
+import { MapViewer } from '../components/MapViewer';
 
 export const CaptainDashboardPage: React.FC = () => {
   const { user, refreshProfile } = useAuth();
@@ -39,8 +39,7 @@ export const CaptainDashboardPage: React.FC = () => {
   const [otpError, setOtpError] = useState<string | null>(null);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [gpsActive, setGpsActive] = useState(false);
-  const [lastCoords, setLastCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isSimulatingLoc, setIsSimulatingLoc] = useState(false);
 
   // Load initial data
   const loadData = async () => {
@@ -176,51 +175,26 @@ export const CaptainDashboardPage: React.FC = () => {
     }
   };
 
-  // Real Device GPS Tracking when online or during an active ride
-  useEffect(() => {
-    if ((!profile?.online && !activeRide) || !navigator.geolocation) {
-      setGpsActive(false);
-      return;
+  // GPS Simulation: Moves captain smoothly towards destination
+  const handleSimulateGPS = async () => {
+    if (!activeRide || isSimulatingLoc) return;
+    setIsSimulatingLoc(true);
+
+    const startLat = activeRide.pickupLat;
+    const startLng = activeRide.pickupLng;
+    const endLat = activeRide.destLat;
+    const endLng = activeRide.destLng;
+
+    const steps = 8;
+    for (let i = 1; i <= steps; i++) {
+      const curLat = startLat + ((endLat - startLat) * i) / steps;
+      const curLng = startLng + ((endLng - startLng) * i) / steps;
+
+      await api.captain.updateLocation(curLat, curLng, 45);
+      await new Promise((r) => setTimeout(r, 1200));
     }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, heading } = pos.coords;
-        setLastCoords({ lat: latitude, lng: longitude });
-        setGpsActive(true);
-        api.captain.updateLocation(latitude, longitude, heading || 0).catch(console.warn);
-      },
-      (err) => {
-        console.warn('Captain GPS tracking error:', err.message);
-        setGpsActive(false);
-      },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
-    );
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
-  }, [profile?.online, activeRide?.id]);
-
-  const handleManualGpsSync = () => {
-    if (!navigator.geolocation) {
-      alert('Device geolocation is not supported in this browser.');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude, heading } = pos.coords;
-        setLastCoords({ lat: latitude, lng: longitude });
-        setGpsActive(true);
-        api.captain.updateLocation(latitude, longitude, heading || 0)
-          .then(() => alert(`GPS location updated: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`))
-          .catch((err) => alert(err.message || 'Failed to broadcast location'));
-      },
-      (err) => {
-        alert('Could not obtain device location: ' + err.message);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    setIsSimulatingLoc(false);
   };
 
   return (
@@ -319,7 +293,35 @@ export const CaptainDashboardPage: React.FC = () => {
               <p className="text-2xl font-black text-slate-900">
                 ₹{(activeRide.finalFare || activeRide.estimatedFare).toFixed(2)}
               </p>
-            </div>
+          </div>
+          </div>
+
+          {/* Active Trip Route Map with Highlighted Travel Path */}
+          <div className="rounded-2xl overflow-hidden border border-slate-200 h-[280px] sm:h-[340px] shadow-inner relative">
+            <MapViewer
+              pickup={{
+                lat: activeRide.pickupLat,
+                lng: activeRide.pickupLng,
+                address: activeRide.pickupAddress,
+              }}
+              destination={{
+                lat: activeRide.destLat,
+                lng: activeRide.destLng,
+                address: activeRide.destAddress,
+              }}
+              captainLocation={
+                activeRide.captainCurrentLat && activeRide.captainCurrentLng
+                  ? { lat: activeRide.captainCurrentLat, lng: activeRide.captainCurrentLng }
+                  : profile?.currentLatitude && profile?.currentLongitude
+                  ? { lat: profile.currentLatitude, lng: profile.currentLongitude }
+                  : undefined
+              }
+              routeDistanceKm={activeRide.distanceKm}
+              routeDurationMins={activeRide.durationMinutes}
+              interactiveSelectionPopup={false}
+              showPinControls={false}
+              className="h-full w-full"
+            />
           </div>
 
           {/* Route Info */}
@@ -336,30 +338,6 @@ export const CaptainDashboardPage: React.FC = () => {
               <span>Distance: {activeRide.distanceKm} km</span>
               <span>Estimated: ~{activeRide.durationMinutes} mins</span>
             </div>
-          </div>
-
-          {/* Active Trip Interactive Map */}
-          <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 p-2">
-            <MapViewer
-              pickup={{
-                lat: activeRide.pickupLat,
-                lng: activeRide.pickupLng,
-                address: activeRide.pickupAddress,
-              }}
-              destination={{
-                lat: activeRide.destLat,
-                lng: activeRide.destLng,
-                address: activeRide.destAddress,
-              }}
-              captainLocation={
-                lastCoords
-                  ? lastCoords
-                  : activeRide.captainCurrentLat && activeRide.captainCurrentLng
-                  ? { lat: activeRide.captainCurrentLat, lng: activeRide.captainCurrentLng }
-                  : undefined
-              }
-              className="h-[320px] w-full rounded-xl"
-            />
           </div>
 
           {/* Action buttons matching lifecycle */}
@@ -390,23 +368,14 @@ export const CaptainDashboardPage: React.FC = () => {
                 >
                   Complete Trip & Collect Fare
                 </button>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${gpsActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                    <span className="text-slate-700">
-                      {gpsActive && lastCoords
-                        ? `Live GPS Active: ${lastCoords.lat.toFixed(4)}, ${lastCoords.lng.toFixed(4)}`
-                        : 'Hardware GPS Tracking Active'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleManualGpsSync}
-                    className="text-brand-700 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <Navigation className="w-3.5 h-3.5" /> Sync GPS
-                  </button>
-                </div>
+                <button
+                  disabled={isSimulatingLoc}
+                  onClick={handleSimulateGPS}
+                  className="w-full border-2 border-brand-500 text-brand-800 font-bold py-2.5 rounded-xl text-xs hover:bg-brand-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Navigation className="w-4 h-4 text-brand-600" />
+                  {isSimulatingLoc ? 'Simulating GPS Driving...' : 'Simulate GPS Movement on Customer Map'}
+                </button>
               </div>
             )}
           </div>

@@ -12,8 +12,8 @@ import {
 import { MapViewer } from '../components/MapViewer';
 import { FareCard } from '../components/FareCard';
 import { RideStatusModal } from '../components/RideStatusModal';
-import { AddressAutocomplete } from '../components/AddressAutocomplete';
 import {
+  MapPin,
   Tag,
   CreditCard,
   Banknote,
@@ -21,10 +21,19 @@ import {
   Crosshair,
   AlertCircle,
   RefreshCw,
-  Navigation,
-  CheckCircle2,
-  MapPin,
 } from 'lucide-react';
+
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
+
+const PRESET_LOCATIONS = [
+  { name: 'MG Road Metro Station', lat: 12.9756, lng: 77.6066 },
+  { name: 'Koramangala 5th Block', lat: 12.9352, lng: 77.6245 },
+  { name: 'Indiranagar 100ft Road', lat: 12.9785, lng: 77.6408 },
+  { name: 'Majestic Bus Terminal', lat: 12.9784, lng: 77.5726 },
+  { name: 'Electronic City Phase 1', lat: 12.8452, lng: 77.6602 },
+  { name: 'Whitefield ITPL', lat: 12.9866, lng: 77.7381 },
+  { name: 'Kempegowda Airport', lat: 13.1986, lng: 77.7066 },
+];
 
 export const CustomerBookingPage: React.FC = () => {
   const { user } = useAuth();
@@ -32,21 +41,16 @@ export const CustomerBookingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // User detected device location
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
-  const [isLocating, setIsLocating] = useState(false);
-  const [geoNotice, setGeoNotice] = useState<{ type: 'info' | 'success' | 'warn'; message: string } | null>(null);
-
-  // Pickup and Destination
-  const [pickup, setPickup] = useState<{ address: string; lat: number; lng: number }>({
-    address: '',
-    lat: 0,
-    lng: 0,
+  // Coordinates & addresses
+  const [pickup, setPickup] = useState({
+    address: 'MG Road Metro Station, Bengaluru',
+    lat: 12.9756,
+    lng: 77.6066,
   });
-  const [destination, setDestination] = useState<{ address: string; lat: number; lng: number }>({
-    address: '',
-    lat: 0,
-    lng: 0,
+  const [destination, setDestination] = useState({
+    address: 'Koramangala 5th Block, Bengaluru',
+    lat: 12.9352,
+    lng: 77.6245,
   });
 
   const [selectionMode, setSelectionMode] = useState<'pickup' | 'destination' | null>(null);
@@ -63,89 +67,68 @@ export const CustomerBookingPage: React.FC = () => {
   // Active ride state
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [captainLocation, setCaptainLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Geolocation trigger function
-  const handleGetLocation = (isInitial = false) => {
-    if (!navigator.geolocation) {
-      if (!isInitial) {
-        setGeoNotice({ type: 'warn', message: 'Geolocation is not supported by your browser.' });
-      }
-      return;
-    }
-
-    setIsLocating(true);
-    if (!isInitial) {
-      setGeoNotice({ type: 'info', message: 'Accessing GPS device location...' });
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setCurrentLocation({ lat, lng });
-
-        try {
-          const rev = await api.geo.reverse(lat, lng);
-          const addr = rev.displayName || `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          setPickup({ address: addr, lat, lng });
-          setGeoNotice({ type: 'success', message: `Pickup set to your current location: ${addr}` });
-        } catch {
-          const fallback = `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          setPickup({ address: fallback, lat, lng });
-          setGeoNotice({ type: 'success', message: 'Current location coordinates detected.' });
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (err) => {
-        setIsLocating(false);
-        console.warn('Geolocation error:', err.message);
-        if (!isInitial) {
-          setGeoNotice({
-            type: 'warn',
-            message: 'Location access denied or unavailable. Please search for your pickup address or tap on the map.',
-          });
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-    );
-  };
-
-  // 1. Initial Geolocation on load
-  useEffect(() => {
-    handleGetLocation(true);
-  }, []);
-
-  // 2. Parse query params if redirected from landing page
+  // Parse query params if redirected from landing page & auto-geocode if coordinates missing
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const pAddr = params.get('pickup');
     const dAddr = params.get('dest');
-    if (pAddr) {
-      api.geo.search(pAddr).then((res) => {
-        if (res && res.length > 0) {
-          setPickup({ address: res[0].displayName, lat: res[0].latitude, lng: res[0].longitude });
-        } else {
-          setPickup((prev) => ({ ...prev, address: pAddr }));
-        }
+    const pLat = params.get('pLat');
+    const pLng = params.get('pLng');
+    const dLat = params.get('dLat');
+    const dLng = params.get('dLng');
+    const cat = params.get('cat') as VehicleCategory | null;
+
+    if (pLat && pLng) {
+      setPickup({
+        address: pAddr || 'Pickup Point',
+        lat: parseFloat(pLat),
+        lng: parseFloat(pLng),
       });
+    } else if (pAddr) {
+      setPickup((prev) => ({ ...prev, address: pAddr }));
+      api.geo.search(pAddr).then((results) => {
+        if (results && results.length > 0) {
+          setPickup({
+            address: results[0].displayName || pAddr,
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+          });
+        }
+      }).catch(() => {});
     }
-    if (dAddr) {
-      api.geo.search(dAddr).then((res) => {
-        if (res && res.length > 0) {
-          setDestination({ address: res[0].displayName, lat: res[0].latitude, lng: res[0].longitude });
-        } else {
-          setDestination((prev) => ({ ...prev, address: dAddr }));
-        }
+
+    if (dLat && dLng) {
+      setDestination({
+        address: dAddr || 'Destination Point',
+        lat: parseFloat(dLat),
+        lng: parseFloat(dLng),
       });
+    } else if (dAddr) {
+      setDestination((prev) => ({ ...prev, address: dAddr }));
+      api.geo.search(dAddr).then((results) => {
+        if (results && results.length > 0) {
+          setDestination({
+            address: results[0].displayName || dAddr,
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+          });
+        }
+      }).catch(() => {});
+    }
+
+    if (cat && ['BIKE', 'AUTO', 'CAB'].includes(cat)) {
+      setSelectedCategory(cat);
     }
   }, [location.search]);
 
-  // 3. Check if customer already has active ride on load
+  // Check if customer already has active ride on load
   useEffect(() => {
     if (user) {
       api.customer
@@ -153,6 +136,20 @@ export const CustomerBookingPage: React.FC = () => {
         .then((ride) => {
           if (ride && ride.status !== 'CANCELLED') {
             setActiveRide(ride);
+            if (ride.pickupLat && ride.pickupLng) {
+              setPickup({
+                address: ride.pickupAddress || 'Pickup Point',
+                lat: ride.pickupLat,
+                lng: ride.pickupLng,
+              });
+            }
+            if (ride.destLat && ride.destLng) {
+              setDestination({
+                address: ride.destAddress || 'Destination',
+                lat: ride.destLat,
+                lng: ride.destLng,
+              });
+            }
             if (ride.captainCurrentLat && ride.captainCurrentLng) {
               setCaptainLocation({
                 lat: ride.captainCurrentLat,
@@ -165,7 +162,7 @@ export const CustomerBookingPage: React.FC = () => {
     }
   }, [user]);
 
-  // 4. Subscribe to real-time WebSocket ride updates
+  // Subscribe to real-time WebSocket ride updates
   useEffect(() => {
     if (!activeRide) return;
 
@@ -192,32 +189,43 @@ export const CustomerBookingPage: React.FC = () => {
     };
   }, [activeRide?.id]);
 
-  // 5. Fetch Fare Estimates whenever coordinates or coupon change
+  // Fetch Fare Estimates whenever coordinates or coupon change
   const fetchEstimates = async () => {
-    if (!pickup.lat || !pickup.lng || !destination.lat || !destination.lng) return;
+    if (!pickup.lat || !destination.lat) return;
     setIsLoadingEstimate(true);
     setErrorMessage(null);
     try {
       const res = await api.rides.estimate({
         pickupLat: pickup.lat,
         pickupLng: pickup.lng,
-        pickupAddress: pickup.address || 'Pickup Point',
+        pickupAddress: pickup.address,
         destLat: destination.lat,
         destLng: destination.lng,
-        destAddress: destination.address || 'Destination',
+        destAddress: destination.address,
         couponCode: appliedCoupon || undefined,
       });
       setEstimates(res);
     } catch (err: any) {
       setErrorMessage(err.message || 'Could not calculate fare estimate');
-      setEstimates(null);
     } finally {
       setIsLoadingEstimate(false);
     }
   };
 
   useEffect(() => {
-    if (!activeRide && pickup.lat && destination.lat) {
+    if (activeRide) {
+      api.rides
+        .estimate({
+          pickupLat: activeRide.pickupLat,
+          pickupLng: activeRide.pickupLng,
+          pickupAddress: activeRide.pickupAddress,
+          destLat: activeRide.destLat,
+          destLng: activeRide.destLng,
+          destAddress: activeRide.destAddress,
+        })
+        .then(setEstimates)
+        .catch(() => {});
+    } else {
       fetchEstimates();
     }
   }, [pickup.lat, pickup.lng, destination.lat, destination.lng, appliedCoupon, activeRide]);
@@ -229,35 +237,77 @@ export const CustomerBookingPage: React.FC = () => {
     }
   };
 
-  const handleMapClick = async (lat: number, lng: number) => {
-    if (!selectionMode) return;
-
-    let address = `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+  // Called when user drags green pickup pin or clicks to set pickup on map
+  const handleMapPickupChange = async (loc: { lat: number; lng: number; address?: string }) => {
     try {
-      const rev = await api.geo.reverse(lat, lng);
-      if (rev && rev.displayName) {
-        address = rev.displayName;
-      }
-    } catch (e) {
-      console.warn('Reverse geocode error:', e);
-    }
-
-    if (selectionMode === 'pickup') {
-      setPickup({ lat, lng, address });
-    } else if (selectionMode === 'destination') {
-      setDestination({ lat, lng, address });
+      const rev = await api.geo.reverse(loc.lat, loc.lng);
+      setPickup({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: rev.displayName || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
+    } catch {
+      setPickup({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: loc.address || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
     }
     setSelectionMode(null);
+  };
+
+  // Called when user drags red destination pin or clicks to set destination on map
+  const handleMapDestChange = async (loc: { lat: number; lng: number; address?: string }) => {
+    try {
+      const rev = await api.geo.reverse(loc.lat, loc.lng);
+      setDestination({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: rev.displayName || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
+    } catch {
+      setDestination({
+        lat: loc.lat,
+        lng: loc.lng,
+        address: loc.address || `Location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`,
+      });
+    }
+    setSelectionMode(null);
+  };
+
+  const handleMapClick = async (lat: number, lng: number) => {
+    if (selectionMode === 'pickup') {
+      await handleMapPickupChange({ lat, lng });
+    } else if (selectionMode === 'destination') {
+      await handleMapDestChange({ lat, lng });
+    }
+  };
+
+  const handleLocateUser = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCurrentLocation({ lat, lng });
+        await handleMapPickupChange({ lat, lng });
+        setIsLocating(false);
+      },
+      (err) => {
+        console.warn('Geolocation lookup failed:', err);
+        setIsLocating(false);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
   };
 
   const handleBookRide = async () => {
     if (!user) {
       navigate('/login?redirect=/book');
-      return;
-    }
-
-    if (!pickup.lat || !destination.lat) {
-      setErrorMessage('Please select both pickup and destination locations.');
       return;
     }
 
@@ -289,73 +339,66 @@ export const CustomerBookingPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left: Map Viewer */}
         <div className="lg:col-span-7 order-2 lg:order-1 space-y-4">
-          {geoNotice && (
-            <div
-              className={`p-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between border shadow-sm transition-all ${
-                geoNotice.type === 'success'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : geoNotice.type === 'warn'
-                  ? 'bg-amber-50 text-amber-800 border-amber-200'
-                  : 'bg-blue-50 text-blue-800 border-blue-200'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {geoNotice.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                ) : (
-                  <Navigation className="w-4 h-4 text-brand-600 flex-shrink-0 animate-pulse" />
-                )}
-                <span>{geoNotice.message}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setGeoNotice(null)}
-                className="text-xs font-bold opacity-60 hover:opacity-100 ml-2"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200 min-h-[500px]">
+          <div className="bg-white rounded-3xl p-3 shadow-sm border border-slate-200 relative overflow-hidden h-[540px] lg:h-[650px] min-h-[480px]">
             <MapViewer
-              pickup={pickup.lat ? pickup : undefined}
-              destination={destination.lat ? destination : undefined}
+              pickup={
+                activeRide
+                  ? {
+                      lat: activeRide.pickupLat,
+                      lng: activeRide.pickupLng,
+                      address: activeRide.pickupAddress,
+                    }
+                  : pickup
+              }
+              destination={
+                activeRide
+                  ? {
+                      lat: activeRide.destLat,
+                      lng: activeRide.destLng,
+                      address: activeRide.destAddress,
+                    }
+                  : destination
+              }
+              routeGeometry={estimates?.routeGeometry}
+              routeDistanceKm={activeRide ? activeRide.distanceKm : estimates?.distanceKm}
+              routeDurationMins={activeRide ? activeRide.durationMinutes : estimates?.durationMinutes}
               captainLocation={captainLocation}
               currentLocation={currentLocation}
-              routeGeometry={estimates?.routeGeometry}
-              selectionMode={selectionMode}
-              onMapClick={handleMapClick}
-              onLocateUser={() => handleGetLocation(false)}
+              selectionMode={activeRide ? null : selectionMode}
+              onSelectionModeChange={activeRide ? undefined : setSelectionMode}
+              onMapClick={activeRide ? undefined : handleMapClick}
+              onPickupChange={activeRide ? undefined : handleMapPickupChange}
+              onDestinationChange={activeRide ? undefined : handleMapDestChange}
+              onLocateUser={handleLocateUser}
               isLocating={isLocating}
-              className="h-[480px] lg:h-[620px] w-full rounded-2xl"
+              interactiveSelectionPopup={!activeRide}
+              showPinControls={!activeRide}
+              className="h-full w-full rounded-2xl"
             />
           </div>
 
-          {/* Route Summary Tag */}
-          {estimates && (
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-200">
-                  <Navigation className="w-5 h-5 text-brand-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-extrabold text-slate-900">
-                    Road Route: {estimates.distanceKm} km
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Estimated travel duration ~ {estimates.durationMinutes} minutes
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                  Real OSRM Route
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Quick presets bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Popular Spots:
+            </span>
+            {PRESET_LOCATIONS.map((spot) => (
+              <button
+                key={spot.name}
+                type="button"
+                onClick={() =>
+                  setDestination({
+                    lat: spot.lat,
+                    lng: spot.lng,
+                    address: spot.name + ', Bengaluru',
+                  })
+                }
+                className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-brand-100 hover:text-brand-900 text-slate-700 transition-colors"
+              >
+                {spot.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Right: Booking Panel or Active Ride Tracker */}
@@ -368,6 +411,7 @@ export const CustomerBookingPage: React.FC = () => {
                 setCaptainLocation(undefined);
               }}
               onPaymentCompleted={() => {
+                // Refresh active ride
                 api.rides.getById(activeRide.id).then(setActiveRide);
               }}
             />
@@ -376,7 +420,7 @@ export const CustomerBookingPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight">Book a Ride</h2>
-                  <p className="text-xs text-slate-500">Fast, reliable city rides at transparent rates</p>
+                  <p className="text-xs text-slate-500">Fast, reliable rides at transparent rates</p>
                 </div>
                 {isLoadingEstimate && (
                   <RefreshCw className="w-4 h-4 text-brand-600 animate-spin" />
@@ -384,76 +428,97 @@ export const CustomerBookingPage: React.FC = () => {
               </div>
 
               {errorMessage && (
-                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              {/* Autocomplete Locations Inputs */}
+              {/* Locations Input with AddressAutocomplete */}
               <div className="space-y-4">
-                {/* Pickup Autocomplete */}
                 <AddressAutocomplete
                   label="Pickup Location"
-                  placeholder="Search pickup locality, landmark, or street..."
+                  placeholder="Search pickup point or use current location..."
                   value={pickup.address}
                   onAddressChange={(address) => setPickup((prev) => ({ ...prev, address }))}
-                  onSelectLocation={(loc) => setPickup(loc)}
-                  userLat={currentLocation?.lat}
-                  userLng={currentLocation?.lng}
+                  onSelectLocation={(loc) =>
+                    setPickup({ address: loc.address, lat: loc.lat, lng: loc.lng })
+                  }
+                  userLat={pickup.lat}
+                  userLng={pickup.lng}
+                  onUseCurrentLocation={handleLocateUser}
+                  isLocating={isLocating}
                   markerColor="bg-emerald-500"
                   pinButton={
                     <button
                       type="button"
-                      onClick={() => setSelectionMode('pickup')}
-                      className="text-[11px] font-bold text-brand-700 hover:underline flex items-center gap-1"
+                      onClick={() =>
+                        setSelectionMode((prev) => (prev === 'pickup' ? null : 'pickup'))
+                      }
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 ${
+                        selectionMode === 'pickup'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-brand-700 hover:underline'
+                      }`}
                     >
-                      <Crosshair className="w-3 h-3" /> Pin
-                    </button>
-                  }
-                  locateButton={
-                    <button
-                      type="button"
-                      onClick={() => handleGetLocation(false)}
-                      title="Use device GPS"
-                      className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1"
-                    >
-                      <Navigation className="w-3 h-3" /> GPS
+                      <Crosshair className="w-3 h-3" /> Pin on map
                     </button>
                   }
                 />
 
-                {/* Destination Autocomplete */}
                 <AddressAutocomplete
                   label="Destination"
-                  placeholder="Search destination landmark, office, or area..."
+                  placeholder="Search destination..."
                   value={destination.address}
                   onAddressChange={(address) => setDestination((prev) => ({ ...prev, address }))}
-                  onSelectLocation={(loc) => setDestination(loc)}
-                  userLat={pickup.lat || currentLocation?.lat}
-                  userLng={pickup.lng || currentLocation?.lng}
+                  onSelectLocation={(loc) =>
+                    setDestination({ address: loc.address, lat: loc.lat, lng: loc.lng })
+                  }
+                  userLat={destination.lat}
+                  userLng={destination.lng}
                   markerColor="bg-red-500"
                   pinButton={
                     <button
                       type="button"
-                      onClick={() => setSelectionMode('destination')}
-                      className="text-[11px] font-bold text-brand-700 hover:underline flex items-center gap-1"
+                      onClick={() =>
+                        setSelectionMode((prev) => (prev === 'destination' ? null : 'destination'))
+                      }
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 ${
+                        selectionMode === 'destination'
+                          ? 'bg-red-600 text-white'
+                          : 'text-brand-700 hover:underline'
+                      }`}
                     >
-                      <Crosshair className="w-3 h-3" /> Pin
+                      <Crosshair className="w-3 h-3" /> Pin on map
                     </button>
                   }
                 />
               </div>
 
+              {/* Distance & Trip Time Banner */}
+              {estimates && (
+                <div className="p-3.5 bg-brand-50/60 rounded-2xl border border-brand-200/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🛣️</span>
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900">
+                        {estimates.distanceKm} km driving route
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Estimated trip duration ~{estimates.durationMinutes} mins
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-brand-700 bg-white px-2.5 py-1 rounded-xl shadow-sm border border-brand-200">
+                    Live Distance
+                  </span>
+                </div>
+              )}
+
               {/* Ride Categories list */}
               {estimates && (
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase">Available Rides</h3>
-                    <span className="text-[11px] font-bold text-slate-600">
-                      {estimates.distanceKm} km &bull; ~{estimates.durationMinutes} mins
-                    </span>
-                  </div>
+                  <h3 className="text-xs font-bold text-slate-500 uppercase">Available Rides</h3>
                   <div className="space-y-2.5">
                     {estimates.estimates.map((est) => (
                       <FareCard
@@ -531,7 +596,7 @@ export const CustomerBookingPage: React.FC = () => {
               {/* Book Ride Action */}
               <button
                 type="button"
-                disabled={isBooking || !estimates || !pickup.lat || !destination.lat}
+                disabled={isBooking || !estimates}
                 onClick={handleBookRide}
                 className="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50"
               >
