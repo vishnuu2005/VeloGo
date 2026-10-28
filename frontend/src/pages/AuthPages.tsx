@@ -157,6 +157,7 @@ export const CustomerRegisterPage: React.FC = () => {
     password: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
+    gender: 'FEMALE',
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -233,6 +234,33 @@ export const CustomerRegisterPage: React.FC = () => {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="w-full p-2.5 rounded-xl border border-slate-200 font-semibold"
             />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-600 block mb-1">Gender</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'FEMALE', label: 'Female' },
+                { id: 'MALE', label: 'Male' },
+                { id: 'OTHER', label: 'Other' },
+              ].map((g) => (
+                <button
+                  type="button"
+                  key={g.id}
+                  onClick={() => setForm({ ...form, gender: g.id })}
+                  className={`p-2 rounded-xl font-bold border-2 transition-all ${
+                    form.gender === g.id
+                      ? 'border-brand-500 bg-brand-50 text-slate-950 shadow-sm'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <span className="text-[10px] text-slate-400 mt-1 block">
+              Used for safety preferences and Women-Only Bike eligibility.
+            </span>
           </div>
 
           <div className="pt-2 border-t border-slate-100 space-y-2">

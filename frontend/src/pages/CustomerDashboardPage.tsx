@@ -34,14 +34,19 @@ export const CustomerDashboardPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [r, notifs, act] = await Promise.all([
+      const [r, notifs, act, prof] = await Promise.all([
         api.customer.getHistory(),
         api.customer.getNotifications(),
         api.customer.getActiveRide(),
+        api.customer.getProfile().catch(() => null),
       ]);
       setRides(r);
       setNotifications(notifs);
       setActiveRide(act);
+      if (prof) {
+        if (prof.emergencyContactName) setEmergencyName(prof.emergencyContactName);
+        if (prof.emergencyContactPhone) setEmergencyPhone(prof.emergencyContactPhone);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -54,10 +59,15 @@ export const CustomerDashboardPage: React.FC = () => {
   const handleSaveEmergency = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.customer.getHistory(); // endpoint trigger
+      await api.customer.updateProfile({
+        emergencyContactName: emergencyName.trim(),
+        emergencyContactPhone: emergencyPhone.trim(),
+      });
       setSavedEmergency(true);
-      setTimeout(() => setSavedEmergency(false), 2000);
-    } catch (e) {}
+      setTimeout(() => setSavedEmergency(false), 2500);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save emergency contact');
+    }
   };
 
   return (

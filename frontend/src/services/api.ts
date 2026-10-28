@@ -258,6 +258,12 @@ export const api = {
   },
 
   customer: {
+    getProfile: () => request<any>('/customers/me'),
+    updateProfile: (data: { emergencyContactName?: string; emergencyContactPhone?: string }) =>
+      request<any>('/customers/me', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
     getActiveRide: () => request<Ride | null>('/customers/me/active-ride'),
     getHistory: () => request<Ride[]>('/customers/me/rides'),
     getNotifications: () => request<any[]>('/customers/me/notifications'),

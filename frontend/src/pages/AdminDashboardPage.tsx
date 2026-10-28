@@ -23,10 +23,12 @@ import {
   FileText,
   Settings,
   RefreshCw,
+  MessageSquare,
+  HelpCircle,
 } from 'lucide-react';
 
 export const AdminDashboardPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'captains' | 'rides' | 'pricing' | 'coupons' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'captains' | 'rides' | 'pricing' | 'coupons' | 'audit' | 'tickets'>('overview');
 
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [captains, setCaptains] = useState<any[]>([]);
@@ -34,8 +36,15 @@ export const AdminDashboardPage: React.FC = () => {
   const [pricing, setPricing] = useState<FareConfiguration[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
+
+  // Support ticket modal
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [ticketResponse, setTicketResponse] = useState('');
+  const [ticketStatus, setTicketStatus] = useState('RESOLVED');
+  const [isUpdatingTicket, setIsUpdatingTicket] = useState(false);
 
   // Captain review modal
   const [selectedCaptain, setSelectedCaptain] = useState<any | null>(null);
@@ -60,13 +69,14 @@ export const AdminDashboardPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ovRes, capRes, rRes, prRes, cpnRes, audRes] = await Promise.allSettled([
+      const [ovRes, capRes, rRes, prRes, cpnRes, audRes, tktRes] = await Promise.allSettled([
         api.admin.getOverview(),
         api.admin.getCaptains(),
         api.admin.getAllRides(),
         api.admin.getPricing(),
         api.admin.getCoupons(),
         api.admin.getAuditLogs(),
+        api.admin.getAllTickets(),
       ]);
       if (ovRes.status === 'fulfilled') setOverview(ovRes.value);
       if (capRes.status === 'fulfilled') setCaptains(capRes.value?.content || []);
@@ -74,6 +84,7 @@ export const AdminDashboardPage: React.FC = () => {
       if (prRes.status === 'fulfilled') setPricing(prRes.value || []);
       if (cpnRes.status === 'fulfilled') setCoupons(cpnRes.value || []);
       if (audRes.status === 'fulfilled') setAuditLogs(audRes.value?.content || []);
+      if (tktRes.status === 'fulfilled') setTickets(tktRes.value?.content || []);
     } catch (e) {
       console.error('Error loading admin dashboard data:', e);
     } finally {
@@ -84,6 +95,22 @@ export const AdminDashboardPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleRespondTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket) return;
+    setIsUpdatingTicket(true);
+    try {
+      await api.admin.respondTicket(selectedTicket.id, ticketResponse, ticketStatus);
+      setSelectedTicket(null);
+      setTicketResponse('');
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update ticket response');
+    } finally {
+      setIsUpdatingTicket(false);
+    }
+  };
 
   const handleVerifyCaptain = async (status: VerificationStatus) => {
     if (!selectedCaptain) return;
@@ -186,6 +213,7 @@ export const AdminDashboardPage: React.FC = () => {
           { id: 'pricing', label: 'Fares & Pricing' },
           { id: 'coupons', label: 'Coupons & Promos' },
           { id: 'audit', label: 'Audit Trail' },
+          { id: 'tickets', label: `Support & Safety (${tickets.filter((t) => t.status === 'OPEN').length})` },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -649,6 +677,175 @@ export const AdminDashboardPage: React.FC = () => {
                 )))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: SUPPORT & SAFETY TICKETS */}
+      {activeTab === 'tickets' && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900">Support & Safety Incidents</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Review and resolve customer inquiries, safety reports, and trip grievances.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
+                  <th className="pb-3">Ticket ID</th>
+                  <th className="pb-3">User</th>
+                  <th className="pb-3">Category</th>
+                  <th className="pb-3">Subject & Description</th>
+                  <th className="pb-3">Status</th>
+                  <th className="pb-3">Date</th>
+                  <th className="pb-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {tickets.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                      No support tickets submitted yet.
+                    </td>
+                  </tr>
+                ) : (
+                  tickets.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-50">
+                      <td className="py-3 font-mono font-bold text-slate-800">#{t.id.slice(0, 8)}</td>
+                      <td className="py-3">
+                        <p className="font-bold text-slate-900">{t.userName}</p>
+                        <p className="text-slate-400 text-[11px]">{t.userEmail}</p>
+                      </td>
+                      <td className="py-3">
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
+                          t.category === 'SAFETY'
+                            ? 'bg-red-100 text-red-800 border border-red-200'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {t.category}
+                        </span>
+                      </td>
+                      <td className="py-3 max-w-xs">
+                        <p className="font-bold text-slate-900">{t.subject}</p>
+                        <p className="text-slate-500 text-[11px] truncate">{t.description}</p>
+                        {t.adminResponse && (
+                          <p className="text-emerald-700 text-[10px] font-medium mt-0.5 truncate">
+                            <strong>Reply:</strong> {t.adminResponse}
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
+                          t.status === 'RESOLVED' || t.status === 'CLOSED'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : t.status === 'IN_PROGRESS'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-400 text-[11px]">{t.createdAt}</td>
+                      <td className="py-3 text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedTicket(t);
+                            setTicketResponse(t.adminResponse || '');
+                            setTicketStatus(t.status === 'OPEN' ? 'RESOLVED' : t.status);
+                          }}
+                          className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors"
+                        >
+                          Resolve
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Ticket Response Modal */}
+      {selectedTicket && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-4 animate-fadeIn">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                  selectedTicket.category === 'SAFETY' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {selectedTicket.category} TICKET #{selectedTicket.id.slice(0, 8)}
+                </span>
+                <h3 className="text-xl font-black text-slate-900 mt-2">{selectedTicket.subject}</h3>
+                <p className="text-xs text-slate-500">From: {selectedTicket.userName} ({selectedTicket.userEmail})</p>
+              </div>
+              <button onClick={() => setSelectedTicket(null)} className="text-slate-400 hover:text-slate-600">
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
+              <p className="text-slate-700 leading-relaxed font-medium">
+                {selectedTicket.description}
+              </p>
+              {selectedTicket.rideId && (
+                <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-200 font-mono">
+                  Related Ride ID: {selectedTicket.rideId}
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleRespondTicket} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Status</label>
+                <select
+                  value={ticketStatus}
+                  onChange={(e) => setTicketStatus(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-bold bg-white"
+                >
+                  <option value="OPEN">OPEN</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="RESOLVED">RESOLVED</option>
+                  <option value="CLOSED">CLOSED</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Official Resolution / Response</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Explain steps taken or resolution provided to user..."
+                  value={ticketResponse}
+                  onChange={(e) => setTicketResponse(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTicket(null)}
+                  className="border border-slate-300 hover:bg-slate-50 font-bold py-2.5 rounded-xl text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingTicket}
+                  className="bg-brand-500 hover:bg-brand-600 text-slate-950 font-black py-2.5 rounded-xl text-xs transition-colors shadow-glow"
+                >
+                  {isUpdatingTicket ? 'Updating...' : 'Submit Resolution'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
