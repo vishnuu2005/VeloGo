@@ -61,6 +61,9 @@ public class AuthController {
     @GetMapping("/me")
     @Operation(summary = "Get current authenticated user profile")
     public ResponseEntity<AuthDtos.UserDto> getCurrentUser(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
         return ResponseEntity.ok(authService.getCurrentUserDto(userDetails.getId()));
     }
 }

@@ -25,10 +25,11 @@ function getAuthHeader(): Record<string, string> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
     'Content-Type': 'application/json',
     ...getAuthHeader(),
-    ...options.headers,
+    ...((options.headers as Record<string, string>) || {}),
   };
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -36,33 +37,47 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers,
   });
 
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
   if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh')) {
     const refreshToken = localStorage.getItem('velogo_refresh_token');
     if (refreshToken) {
       try {
         const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ refreshToken }),
         });
         if (refreshRes.ok) {
           const authData = (await refreshRes.json()) as AuthResponse;
           localStorage.setItem('velogo_token', authData.accessToken);
           // Retry original request
-          const retryHeaders = {
+          const retryHeaders: Record<string, string> = {
+            Accept: 'application/json',
             'Content-Type': 'application/json',
             Authorization: `Bearer ${authData.accessToken}`,
-            ...options.headers,
+            ...((options.headers as Record<string, string>) || {}),
           };
           const retryResponse = await fetch(`${API_BASE}${path}`, {
             ...options,
             headers: retryHeaders,
           });
+          const retryContentType = retryResponse.headers.get('content-type') || '';
           if (!retryResponse.ok) {
-            const err = await retryResponse.json().catch(() => ({ message: 'Request failed' }));
-            throw new Error(err.message || 'Request failed');
+            let errMessage = `Request failed (${retryResponse.status})`;
+            if (retryContentType.includes('application/json')) {
+              try {
+                const err = await retryResponse.json();
+                if (err?.message) errMessage = err.message;
+              } catch {}
+            }
+            throw new Error(errMessage);
           }
-          return retryResponse.json();
+          if (retryContentType.includes('application/json')) {
+            return retryResponse.json();
+          }
+          return {} as T;
         }
       } catch (e) {
         localStorage.removeItem('velogo_token');
@@ -73,12 +88,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ message: 'Network request failed' }));
-    throw new Error(errorBody.message || `Request failed with status ${response.status}`);
+    let errorMessage = `Request failed with status ${response.status}`;
+    if (isJson) {
+      try {
+        const errorBody = await response.json();
+        if (errorBody?.message) {
+          errorMessage = errorBody.message;
+        }
+      } catch {}
+    }
+    throw new Error(errorMessage);
   }
 
   if (response.status === 204) {
     return {} as T;
+  }
+
+  if (!isJson) {
+    const text = await response.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return {} as T;
+    }
   }
 
   return response.json();

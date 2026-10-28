@@ -161,12 +161,20 @@ public class GeocodingService {
                 String displayName = (String) body.get("display_name");
 
                 Map<?, ?> addr = (Map<?, ?>) body.get("address");
-                String road = addr != null ? (String) addr.get("road") : null;
-                String suburb = addr != null ? (String) addr.get("suburb") : null;
-                String city = addr != null ? (String) Optional.ofNullable(addr.get("city"))
-                        .orElse(Optional.ofNullable(addr.get("town")).orElse(addr.get("county"))) : null;
-                String state = addr != null ? (String) addr.get("state") : null;
-                String postcode = addr != null ? (String) addr.get("postcode") : null;
+                String road = addr != null && addr.get("road") != null ? addr.get("road").toString() : null;
+                String suburb = addr != null && addr.get("suburb") != null ? addr.get("suburb").toString() : null;
+                String city = null;
+                if (addr != null) {
+                    if (addr.get("city") != null) {
+                        city = addr.get("city").toString();
+                    } else if (addr.get("town") != null) {
+                        city = addr.get("town").toString();
+                    } else if (addr.get("county") != null) {
+                        city = addr.get("county").toString();
+                    }
+                }
+                String state = addr != null && addr.get("state") != null ? addr.get("state").toString() : null;
+                String postcode = addr != null && addr.get("postcode") != null ? addr.get("postcode").toString() : null;
 
                 // Format a concise, clean address
                 StringBuilder concise = new StringBuilder();
