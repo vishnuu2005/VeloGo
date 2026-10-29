@@ -35,7 +35,9 @@ public class RideDtos {
             BigDecimal taxAmount,
             BigDecimal discountAmount,
             BigDecimal totalFare,
-            boolean isAvailable
+            boolean isAvailable,
+            BigDecimal subscriptionDiscount,
+            Boolean isSubscriptionFreeRide
     ) {}
 
     public record CouponAppliedDto(
@@ -76,8 +78,30 @@ public class RideDtos {
             String travelerPhone,
             String travelerRelationship,
             String travelerGender,
-            Boolean passengerDeclarationAcknowledged
-    ) {}
+            Boolean passengerDeclarationAcknowledged,
+            com.velogo.domain.enums.BillingProfile billingProfile,
+            String corporateReason
+    ) {
+        public BookRideRequest(
+                BigDecimal pickupLat,
+                BigDecimal pickupLng,
+                String pickupAddress,
+                BigDecimal destLat,
+                BigDecimal destLng,
+                String destAddress,
+                VehicleCategory vehicleCategory,
+                PaymentMethod paymentMethod,
+                String couponCode,
+                Boolean isForSomeoneElse,
+                String travelerName,
+                String travelerPhone,
+                String travelerRelationship,
+                String travelerGender,
+                Boolean passengerDeclarationAcknowledged
+        ) {
+            this(pickupLat, pickupLng, pickupAddress, destLat, destLng, destAddress, vehicleCategory, paymentMethod, couponCode, isForSomeoneElse, travelerName, travelerPhone, travelerRelationship, travelerGender, passengerDeclarationAcknowledged, com.velogo.domain.enums.BillingProfile.PERSONAL, null);
+        }
+    }
 
     public record CancelRideRequest(
             @NotBlank String reason
@@ -128,6 +152,13 @@ public class RideDtos {
             String createdAt,
             String acceptedAt,
             String startedAt,
-            String completedAt
+            String completedAt,
+            com.velogo.domain.enums.BillingProfile billingProfile,
+            String companyId,
+            String companyName,
+            com.velogo.domain.enums.CorporateApprovalStatus corporateApprovalStatus,
+            Boolean requiresApproval,
+            BigDecimal subscriptionDiscount,
+            Boolean isSubscriptionFreeRide
     ) {}
 }

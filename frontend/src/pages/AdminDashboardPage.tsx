@@ -7,6 +7,7 @@ import {
   Coupon,
   VehicleCategory,
   VerificationStatus,
+  Company,
 } from '../types';
 import {
   Shield,
@@ -25,10 +26,11 @@ import {
   RefreshCw,
   MessageSquare,
   HelpCircle,
+  Building2,
 } from 'lucide-react';
 
 export const AdminDashboardPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'captains' | 'rides' | 'pricing' | 'coupons' | 'audit' | 'tickets'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'captains' | 'rides' | 'pricing' | 'coupons' | 'audit' | 'tickets' | 'corporate'>('overview');
 
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [captains, setCaptains] = useState<any[]>([]);
@@ -37,6 +39,11 @@ export const AdminDashboardPage: React.FC = () => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [companyRejectReason, setCompanyRejectReason] = useState('');
+  const [isVerifyingCompany, setIsVerifyingCompany] = useState(false);
+  const [companyStatusFilter, setCompanyStatusFilter] = useState<string>('ALL');
 
   const [loading, setLoading] = useState(true);
 
@@ -69,7 +76,7 @@ export const AdminDashboardPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ovRes, capRes, rRes, prRes, cpnRes, audRes, tktRes] = await Promise.allSettled([
+      const [ovRes, capRes, rRes, prRes, cpnRes, audRes, tktRes, cmpRes] = await Promise.allSettled([
         api.admin.getOverview(),
         api.admin.getCaptains(),
         api.admin.getAllRides(),
@@ -77,6 +84,7 @@ export const AdminDashboardPage: React.FC = () => {
         api.admin.getCoupons(),
         api.admin.getAuditLogs(),
         api.admin.getAllTickets(),
+        api.corporate.getAllCompanies(),
       ]);
       if (ovRes.status === 'fulfilled') setOverview(ovRes.value);
       if (capRes.status === 'fulfilled') setCaptains(capRes.value?.content || []);
@@ -85,6 +93,7 @@ export const AdminDashboardPage: React.FC = () => {
       if (cpnRes.status === 'fulfilled') setCoupons(cpnRes.value || []);
       if (audRes.status === 'fulfilled') setAuditLogs(audRes.value?.content || []);
       if (tktRes.status === 'fulfilled') setTickets(tktRes.value?.content || []);
+      if (cmpRes.status === 'fulfilled') setCompanies(cmpRes.value || []);
     } catch (e) {
       console.error('Error loading admin dashboard data:', e);
     } finally {
@@ -183,6 +192,20 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
+  const handleVerifyCompany = async (companyId: string, status: string, reason?: string) => {
+    setIsVerifyingCompany(true);
+    try {
+      await api.corporate.verifyCompany(companyId, { status, rejectionReason: reason });
+      setSelectedCompany(null);
+      setCompanyRejectReason('');
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update company verification status');
+    } finally {
+      setIsVerifyingCompany(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Top Banner */}
@@ -208,6 +231,7 @@ export const AdminDashboardPage: React.FC = () => {
       <div className="flex border-b border-slate-200 overflow-x-auto space-x-8 text-sm font-bold">
         {[
           { id: 'overview', label: 'Metrics Overview' },
+          { id: 'corporate', label: `Corporate Accounts (${companies.filter((c) => c.status === 'PENDING_VERIFICATION').length})` },
           { id: 'captains', label: `Captain Approvals (${overview?.pendingCaptains || 0})` },
           { id: 'rides', label: 'All Platform Rides' },
           { id: 'pricing', label: 'Fares & Pricing' },
@@ -772,6 +796,177 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 8: CORPORATE ACCOUNTS MODERATION */}
+      {activeTab === 'corporate' && (
+        <div className="space-y-6">
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase">Total Organizations</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{companies.length}</p>
+              <span className="text-[10px] text-slate-500 font-medium">Registered Accounts</span>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-sm bg-gradient-to-br from-white to-amber-50/50">
+              <p className="text-xs font-bold text-amber-700 uppercase">Pending Verification</p>
+              <p className="text-2xl font-black text-amber-600 mt-1">
+                {companies.filter((c) => c.status === 'PENDING_VERIFICATION').length}
+              </p>
+              <span className="text-[10px] text-amber-600 font-bold">Needs Review</span>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase">Active Enterprise Accounts</p>
+              <p className="text-2xl font-black text-emerald-600 mt-1">
+                {companies.filter((c) => c.status === 'ACTIVE').length}
+              </p>
+              <span className="text-[10px] text-emerald-600 font-bold">Eligible for Invoicing</span>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase">Total Credit Allocated</p>
+              <p className="text-2xl font-black text-slate-900 mt-1 font-mono">
+                ₹{companies.reduce((sum, c) => sum + (Number(c.creditLimit) || 0), 0).toLocaleString()}
+              </p>
+              <span className="text-[10px] text-slate-500 font-medium">Platform Exposure</span>
+            </div>
+          </div>
+
+          {/* Status Filter Pills */}
+          <div className="flex items-center gap-2">
+            {['ALL', 'PENDING_VERIFICATION', 'ACTIVE', 'REJECTED', 'SUSPENDED'].map((st) => (
+              <button
+                key={st}
+                onClick={() => setCompanyStatusFilter(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  companyStatusFilter === st
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {st.replace('_', ' ')}
+                {st !== 'ALL' && (
+                  <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-800">
+                    {companies.filter((c) => c.status === st).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Companies Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-amber-500" />
+                <span>Enterprise Organizations Directory</span>
+              </h3>
+              <span className="text-xs text-slate-500 font-medium">
+                Showing {companies.filter((c) => companyStatusFilter === 'ALL' || c.status === companyStatusFilter).length} companies
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                  <tr>
+                    <th className="px-4 py-3">Company Name & Domain</th>
+                    <th className="px-4 py-3">GSTIN / Tax ID</th>
+                    <th className="px-4 py-3">Contact Email</th>
+                    <th className="px-4 py-3">Credit Limit</th>
+                    <th className="px-4 py-3">Approval Threshold</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Moderation Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {companies
+                    .filter((c) => companyStatusFilter === 'ALL' || c.status === companyStatusFilter)
+                    .map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-50/70 transition">
+                        <td className="px-4 py-3.5">
+                          <p className="font-bold text-slate-900 text-sm">{c.name}</p>
+                          {c.domain ? (
+                            <span className="text-[10px] font-mono font-semibold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-200">
+                              @{c.domain} (auto-match)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Manual Invites Only</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-slate-700 font-semibold">{c.taxId}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{c.contactEmail}</td>
+                        <td className="px-4 py-3.5 font-mono font-bold text-slate-900">₹{Number(c.creditLimit).toLocaleString()}</td>
+                        <td className="px-4 py-3.5 font-mono text-amber-700 font-bold">₹{Number(c.approvalThreshold).toLocaleString()}</td>
+                        <td className="px-4 py-3.5">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                              c.status === 'ACTIVE'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : c.status === 'PENDING_VERIFICATION'
+                                ? 'bg-amber-100 text-amber-800 animate-pulse'
+                                : c.status === 'REJECTED'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {c.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right space-x-2">
+                          {c.status === 'PENDING_VERIFICATION' && (
+                            <>
+                              <button
+                                disabled={isVerifyingCompany}
+                                onClick={() => handleVerifyCompany(c.id, 'ACTIVE')}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                disabled={isVerifyingCompany}
+                                onClick={() => {
+                                  setSelectedCompany(c);
+                                  setCompanyRejectReason('');
+                                }}
+                                className="px-3 py-1.5 border border-red-300 text-red-600 hover:bg-red-50 font-bold rounded-lg text-xs transition cursor-pointer"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {c.status === 'ACTIVE' && (
+                            <button
+                              disabled={isVerifyingCompany}
+                              onClick={() => handleVerifyCompany(c.id, 'SUSPENDED', 'Administrative hold')}
+                              className="px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 font-medium rounded-lg text-xs transition cursor-pointer"
+                            >
+                              Suspend
+                            </button>
+                          )}
+                          {(c.status === 'SUSPENDED' || c.status === 'REJECTED') && (
+                            <button
+                              disabled={isVerifyingCompany}
+                              onClick={() => handleVerifyCompany(c.id, 'ACTIVE')}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition cursor-pointer"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  {companies.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                        No corporate accounts registered yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Ticket Response Modal */}
       {selectedTicket && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1009,6 +1204,72 @@ export const AdminDashboardPage: React.FC = () => {
                 className="bg-purple-600 hover:bg-purple-700 text-white font-black py-2.5 rounded-xl text-xs transition-colors disabled:opacity-50"
               >
                 Approve for Women-Only
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Company Rejection Modal */}
+      {selectedCompany && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative space-y-4 animate-fadeIn">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Reject Company Registration</h3>
+                <p className="text-xs text-slate-500">{selectedCompany.name}</p>
+              </div>
+              <button
+                onClick={() => setSelectedCompany(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
+              <p>
+                <strong>GSTIN / Tax ID:</strong> {selectedCompany.taxId}
+              </p>
+              <p>
+                <strong>Domain:</strong> {selectedCompany.domain || 'N/A'}
+              </p>
+              <p>
+                <strong>Contact Email:</strong> {selectedCompany.contactEmail}
+              </p>
+              <p>
+                <strong>Billing Address:</strong> {selectedCompany.billingAddress}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-600 block mb-1">
+                Rejection Reason (Required)
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Invalid GSTIN or company verification documents missing"
+                value={companyRejectReason}
+                onChange={(e) => setCompanyRejectReason(e.target.value)}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-red-400"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCompany(null)}
+                className="border border-slate-300 hover:bg-slate-50 font-bold py-2.5 rounded-xl text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isVerifyingCompany || !companyRejectReason.trim()}
+                onClick={() => handleVerifyCompany(selectedCompany.id, 'REJECTED', companyRejectReason.trim())}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {isVerifyingCompany ? 'Rejecting...' : 'Confirm Rejection'}
               </button>
             </div>
           </div>

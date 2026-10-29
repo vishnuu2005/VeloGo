@@ -15,6 +15,15 @@ import {
   VehicleCategory,
   VerificationStatus,
   AdminOverview,
+  Company,
+  CompanyMember,
+  CorporateDashboardData,
+  CorporateEligibility,
+  CorporateInvoice,
+  RideApprovalRequest,
+  SubscriptionPlan,
+  UserSubscription,
+  UserSubscriptionPortal,
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -193,6 +202,8 @@ export const api = {
       travelerRelationship?: string;
       travelerGender?: string;
       passengerDeclarationAcknowledged?: boolean;
+      billingProfile?: 'PERSONAL' | 'CORPORATE';
+      corporateReason?: string;
     }) =>
       request<Ride>('/rides', {
         method: 'POST',
@@ -377,5 +388,103 @@ export const api = {
       request<{ distanceKm: number; durationMinutes: number; geometry: [number, number][] }>(
         `/geo/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`
       ),
+  },
+
+  corporate: {
+    getMyProfile: () => request<CompanyMember | null>('/corporate/profile'),
+    checkEligibility: (fare: number) =>
+      request<CorporateEligibility>(`/corporate/eligibility?fare=${fare}`),
+    getDashboard: () => request<CorporateDashboardData>('/corporate/dashboard'),
+    registerCompany: (data: {
+      name: string;
+      taxId: string;
+      billingAddress: string;
+      domain?: string;
+      contactEmail: string;
+      creditLimit: number;
+      approvalThreshold: number;
+    }) =>
+      request<Company>('/corporate/companies', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    addMember: (
+      companyId: string,
+      data: { userEmail: string; role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE'; monthlyBudget: number }
+    ) =>
+      request<CompanyMember>(`/corporate/companies/${companyId}/members`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateMember: (
+      companyId: string,
+      memberId: string,
+      data: { monthlyBudget?: number; role?: string; status?: string }
+    ) =>
+      request<CompanyMember>(`/corporate/companies/${companyId}/members/${memberId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    reviewApproval: (
+      requestId: string,
+      data: { approved: boolean; rejectionReason?: string }
+    ) =>
+      request<RideApprovalRequest>(`/corporate/approvals/${requestId}/review`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    generateInvoice: (companyId: string, startDate?: string, endDate?: string) => {
+      const p = new URLSearchParams();
+      if (startDate) p.append('startDate', startDate);
+      if (endDate) p.append('endDate', endDate);
+      return request<CorporateInvoice>(
+        `/corporate/companies/${companyId}/invoices/generate?${p.toString()}`,
+        { method: 'POST' }
+      );
+    },
+    getAllCompanies: (status?: string) =>
+      request<Company[]>(`/corporate/companies${status ? `?status=${status}` : ''}`),
+    verifyCompany: (companyId: string, data: { status: string; rejectionReason?: string }) =>
+      request<Company>(`/corporate/companies/${companyId}/verification`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+  },
+
+  subscriptions: {
+    getPlans: () => request<SubscriptionPlan[]>('/subscriptions/plans'),
+    getPortal: () => request<UserSubscriptionPortal>('/subscriptions/portal'),
+    createOrder: (planId: string) =>
+      request<{
+        orderId: string;
+        planId: string;
+        planName: string;
+        amount: number;
+        currency: string;
+        keyId: string;
+      }>(`/subscriptions/order?planId=${planId}`, { method: 'POST' }),
+    verifyPayment: (data: {
+      planId: string;
+      razorpayOrderId: string;
+      razorpayPaymentId?: string;
+      razorpaySignature?: string;
+    }) =>
+      request<UserSubscription>('/subscriptions/verify', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    subscribe: (planId: string, paymentMethodId?: string) =>
+      request<UserSubscription>('/subscriptions/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ planId, paymentMethodId }),
+      }),
+    toggleAutoRenew: (subscriptionId: string) =>
+      request<UserSubscription>(`/subscriptions/${subscriptionId}/toggle-autorenew`, {
+        method: 'POST',
+      }),
+    cancel: (subscriptionId: string) =>
+      request<UserSubscription>(`/subscriptions/${subscriptionId}/cancel`, {
+        method: 'POST',
+      }),
   },
 };

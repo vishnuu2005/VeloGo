@@ -13,7 +13,7 @@ export type RideStatus =
   | 'CANCELLED'
   | 'EXPIRED';
 
-export type PaymentMethod = 'CASH' | 'RAZORPAY';
+export type PaymentMethod = 'CASH' | 'RAZORPAY' | 'CORPORATE' | 'SUBSCRIPTION_PASS';
 
 export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
 
@@ -77,6 +77,8 @@ export interface CategoryEstimate {
   discountAmount: number;
   totalFare: number;
   isAvailable: boolean;
+  subscriptionDiscount?: number;
+  isSubscriptionFreeRide?: boolean;
 }
 
 export interface CouponApplied {
@@ -112,6 +114,9 @@ export interface FareEstimateResponse {
   couponApplied?: CouponApplied;
   routeGeometry?: [number, number][];
 }
+
+export type BillingProfile = 'PERSONAL' | 'CORPORATE';
+export type CorporateApprovalStatus = 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface Ride {
   id: string;
@@ -159,6 +164,167 @@ export interface Ride {
   acceptedAt?: string;
   startedAt?: string;
   completedAt?: string;
+  billingProfile?: BillingProfile;
+  companyId?: string;
+  companyName?: string;
+  corporateApprovalStatus?: CorporateApprovalStatus;
+  requiresApproval?: boolean;
+  subscriptionDiscount?: number;
+  isSubscriptionFreeRide?: boolean;
+}
+
+// Corporate B2B Models
+export type CompanyMemberRole = 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+export type CompanyMemberStatus = 'ACTIVE' | 'SUSPENDED' | 'INVITED';
+export type CompanyStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'OVERDUE';
+
+export interface Company {
+  id: string;
+  name: string;
+  taxId: string;
+  billingAddress: string;
+  domain?: string;
+  contactEmail: string;
+  creditLimit: number;
+  usedCredit: number;
+  availableCredit: number;
+  status: CompanyStatus;
+  approvalThreshold: number;
+  rejectionReason?: string;
+  memberCount: number;
+  pendingApprovalsCount: number;
+  createdAt: string;
+}
+
+export interface CompanyMember {
+  id: string;
+  companyId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  role: CompanyMemberRole;
+  monthlyBudget: number;
+  currentMonthSpent: number;
+  remainingBudget: number;
+  status: CompanyMemberStatus;
+  createdAt: string;
+}
+
+export interface RideApprovalRequest {
+  id: string;
+  rideId?: string;
+  companyId: string;
+  companyName: string;
+  employeeId: string;
+  employeeName: string;
+  employeeEmail: string;
+  approverId?: string;
+  approverName?: string;
+  status: ApprovalStatus;
+  estimatedFare: number;
+  pickupAddress?: string;
+  destAddress?: string;
+  reason?: string;
+  rejectionReason?: string;
+  requestedAt: string;
+  reviewedAt?: string;
+}
+
+export interface CorporateInvoice {
+  id: string;
+  companyId: string;
+  companyName: string;
+  invoiceNumber: string;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  ridesCount: number;
+  status: InvoiceStatus;
+  invoiceUrl?: string;
+  dueDate: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+export interface CorporateEligibility {
+  eligible: boolean;
+  requiresApproval: boolean;
+  remainingBudget: number;
+  estimatedFare: number;
+  reason: string;
+  companyName?: string;
+  companyId?: string;
+  memberRole?: string;
+}
+
+export interface CorporateDashboardData {
+  company: Company;
+  members: CompanyMember[];
+  pendingApprovals: RideApprovalRequest[];
+  recentInvoices: CorporateInvoice[];
+  totalRidesTaken: number;
+  totalSpentCurrentMonth: number;
+}
+
+// Subscription & Commuter Passes Models
+export type SubscriptionTier = 'BASIC' | 'COMMUTER' | 'PRO' | 'VIP';
+export type SubscriptionInterval = 'MONTHLY' | 'ANNUAL';
+export type SubscriptionStatus = 'ACTIVE' | 'CANCELLED' | 'EXPIRED' | 'PAST_DUE';
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  tier: SubscriptionTier;
+  price: number;
+  interval: SubscriptionInterval;
+  discountPercentage: number;
+  maxDiscountPerRide: number;
+  freeRidesCount: number;
+  priorityMatching: boolean;
+  status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export interface UserSubscription {
+  id: string;
+  userId: string;
+  userName: string;
+  planId: string;
+  planName: string;
+  planTier: SubscriptionTier;
+  planPrice: number;
+  planInterval: SubscriptionInterval;
+  status: SubscriptionStatus;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  autoRenew: boolean;
+  remainingFreeRides: number;
+  totalDiscountSaved: number;
+  totalRidesTaken: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface SubscriptionUsage {
+  id: string;
+  userSubscriptionId: string;
+  rideId?: string;
+  discountApplied: number;
+  wasFreeRide: boolean;
+  usedAt: string;
+}
+
+export interface UserSubscriptionPortal {
+  activeSubscription?: UserSubscription;
+  availablePlans: SubscriptionPlan[];
+  recentUsages: SubscriptionUsage[];
+  totalSavings: number;
+  ridesWithPass: number;
 }
 
 export interface PaymentReceipt {

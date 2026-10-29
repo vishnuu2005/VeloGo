@@ -35,6 +35,8 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final NotificationService notificationService;
     private final CaptainService captainService;
+    @org.springframework.context.annotation.Lazy
+    private final CorporateService corporateService;
 
     @Transactional
     public AuthDtos.AuthResponse login(AuthDtos.LoginRequest req) {
@@ -56,6 +58,8 @@ public class AuthService {
 
         // Store refresh token
         saveRefreshToken(user, refreshToken);
+
+        corporateService.checkAndAutoJoinCompanyByEmail(user);
 
         AuthDtos.UserDto userDto = buildUserDto(user);
         return new AuthDtos.AuthResponse(accessToken, refreshToken, "Bearer", userDto);
@@ -105,6 +109,8 @@ public class AuthService {
         String accessToken = jwtTokenProvider.generateAccessToken(savedUser.getId(), savedUser.getEmail(), savedUser.getRole().name());
         String refreshToken = jwtTokenProvider.generateRefreshToken(savedUser.getId());
         saveRefreshToken(savedUser, refreshToken);
+
+        corporateService.checkAndAutoJoinCompanyByEmail(savedUser);
 
         AuthDtos.UserDto userDto = buildUserDto(savedUser);
         return new AuthDtos.AuthResponse(accessToken, refreshToken, "Bearer", userDto);

@@ -8,6 +8,8 @@ spring:
     name: velogo-backend
   profiles:
     active: dev
+  main:
+    allow-circular-references: true
   jackson:
     serialization:
       write-dates-as-timestamps: false

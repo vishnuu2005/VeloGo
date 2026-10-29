@@ -128,6 +128,13 @@ export const LoginPage: React.FC = () => {
             >
               Admin
             </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemoLogin('corpadmin@acme.corp', 'password123')}
+              className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-bold text-center transition-colors col-span-3 flex items-center justify-center gap-1.5"
+            >
+              🏢 Acme Corp Admin (Enterprise B2B)
+            </button>
           </div>
         </div>
 

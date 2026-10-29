@@ -45,4 +45,10 @@ public interface RideRepository extends JpaRepository<Ride, String> {
 
     @Query("SELECT COALESCE(SUM(r.finalFare), 0) FROM Ride r WHERE r.status = com.velogo.domain.enums.RideStatus.COMPLETED")
     BigDecimal calculateTotalGrossBookingValue();
+
+    List<Ride> findByCompanyIdAndStatusAndCompletedAtBetween(String companyId, RideStatus status, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
+    List<Ride> findByCompanyIdOrderByCreatedAtDesc(String companyId);
+
+    long countByCompanyId(String companyId);
 }

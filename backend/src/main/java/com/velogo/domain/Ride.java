@@ -101,6 +101,36 @@ public class Ride {
     @Builder.Default
     private boolean passengerDeclarationAcknowledged = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_profile", nullable = false, length = 20)
+    @Builder.Default
+    private com.velogo.domain.enums.BillingProfile billingProfile = com.velogo.domain.enums.BillingProfile.PERSONAL;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id")
+    private Company company;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "corporate_approval_status", nullable = false, length = 20)
+    @Builder.Default
+    private com.velogo.domain.enums.CorporateApprovalStatus corporateApprovalStatus = com.velogo.domain.enums.CorporateApprovalStatus.NOT_REQUIRED;
+
+    @Column(name = "requires_approval", nullable = false)
+    @Builder.Default
+    private boolean requiresApproval = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subscription_id")
+    private UserSubscription subscription;
+
+    @Column(name = "subscription_discount", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal subscriptionDiscount = BigDecimal.ZERO;
+
+    @Column(name = "is_subscription_free_ride", nullable = false)
+    @Builder.Default
+    private boolean isSubscriptionFreeRide = false;
+
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
 

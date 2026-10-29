@@ -75,14 +75,35 @@ export const FareCard: React.FC<FareCardProps> = ({ estimate, isSelected, onSele
 
         {/* Right: Price & select indicator */}
         <div className="text-right">
-          {Number(estimate.discountAmount || 0) > 0 && (
-            <p className="text-xs text-slate-400 line-through font-medium">
-              ₹{(Number(estimate.totalFare || 0) + Number(estimate.discountAmount || 0)).toFixed(2)}
-            </p>
+          {estimate.isSubscriptionFreeRide ? (
+            <div>
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider mb-1 animate-pulse">
+                🎟️ Free Ride
+              </span>
+              <p className="text-xs text-slate-400 line-through font-medium">
+                ₹{(Number(estimate.baseFare || 0) + Number(estimate.distanceCharge || 0) + Number(estimate.timeCharge || 0) + Number(estimate.bookingFee || 0)).toFixed(2)}
+              </p>
+              <p className="text-xl font-extrabold text-emerald-600">
+                ₹0.00
+              </p>
+            </div>
+          ) : (
+            <div>
+              {Number(estimate.subscriptionDiscount || 0) > 0 && (
+                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 uppercase tracking-wider mb-1">
+                  Pass -₹{Number(estimate.subscriptionDiscount).toFixed(0)}
+                </span>
+              )}
+              {(Number(estimate.discountAmount || 0) > 0 || Number(estimate.subscriptionDiscount || 0) > 0) && (
+                <p className="text-xs text-slate-400 line-through font-medium">
+                  ₹{(Number(estimate.totalFare || 0) + Number(estimate.discountAmount || 0) + Number(estimate.subscriptionDiscount || 0)).toFixed(2)}
+                </p>
+              )}
+              <p className="text-xl font-extrabold text-slate-900">
+                ₹{Number(estimate.totalFare || 0).toFixed(2)}
+              </p>
+            </div>
           )}
-          <p className="text-xl font-extrabold text-slate-900">
-            ₹{Number(estimate.totalFare || 0).toFixed(2)}
-          </p>
           <button
             type="button"
             onClick={(e) => {
@@ -117,10 +138,21 @@ export const FareCard: React.FC<FareCardProps> = ({ estimate, isSelected, onSele
           </div>
           {Number(estimate.discountAmount || 0) > 0 && (
             <div className="flex justify-between text-emerald-600 font-semibold">
-              <span>Promotional Discount</span>
+              <span>Promotional Coupon</span>
               <span>-₹{Number(estimate.discountAmount || 0).toFixed(2)}</span>
             </div>
           )}
+          {estimate.isSubscriptionFreeRide ? (
+            <div className="flex justify-between text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded-lg">
+              <span>Subscription Pass (100% Free Ride)</span>
+              <span>-100% (FREE)</span>
+            </div>
+          ) : Number(estimate.subscriptionDiscount || 0) > 0 ? (
+            <div className="flex justify-between text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-lg">
+              <span>Subscription Pass Savings</span>
+              <span>-₹{Number(estimate.subscriptionDiscount || 0).toFixed(2)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between text-slate-400">
             <span>Applicable Taxes</span>
             <span>₹{Number(estimate.taxAmount || 0).toFixed(2)}</span>

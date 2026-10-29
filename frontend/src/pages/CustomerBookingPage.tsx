@@ -21,12 +21,18 @@ import {
   ArrowRight,
   Crosshair,
   AlertCircle,
+  ShieldCheck,
+  Info,
+  Building2,
+  Ticket,
+  Crown,
+  Briefcase,
+  User as UserIcon,
   RefreshCw,
   Users,
   UserCheck,
-  ShieldCheck,
-  Info,
 } from 'lucide-react';
+import { CompanyMember, UserSubscription, CorporateEligibility, BillingProfile } from '../types';
 
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
@@ -86,6 +92,34 @@ export const CustomerBookingPage: React.FC = () => {
   const [isBooking, setIsBooking] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Corporate & Subscription Profile State
+  const [billingProfile, setBillingProfile] = useState<BillingProfile>('PERSONAL');
+  const [corporateReason, setCorporateReason] = useState('');
+  const [corporateMember, setCorporateMember] = useState<CompanyMember | null>(null);
+  const [activeSubscription, setActiveSubscription] = useState<UserSubscription | null>(null);
+  const [corporateEligibility, setCorporateEligibility] = useState<CorporateEligibility | null>(null);
+  const [approvalSubmittedModal, setApprovalSubmittedModal] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      api.corporate.getMyProfile().then(setCorporateMember).catch(() => {});
+      api.subscriptions.getPortal().then((p) => {
+        if (p?.activeSubscription && p.activeSubscription.isActive) {
+          setActiveSubscription(p.activeSubscription);
+        }
+      }).catch(() => {});
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user && billingProfile === 'CORPORATE') {
+      const est = estimates?.estimates?.find((e) => e.category === selectedCategory);
+      if (est) {
+        api.corporate.checkEligibility(est.totalFare).then(setCorporateEligibility).catch(() => {});
+      }
+    }
+  }, [user, billingProfile, selectedCategory, estimates]);
 
   // Parse query params if redirected from landing page & auto-geocode if coordinates missing
   useEffect(() => {
@@ -386,8 +420,13 @@ export const CustomerBookingPage: React.FC = () => {
         travelerRelationship: isForSomeoneElse ? travelerRelationship : undefined,
         travelerGender: isForSomeoneElse ? travelerGender : 'FEMALE',
         passengerDeclarationAcknowledged: passengerDeclarationConfirmed,
+        billingProfile,
+        corporateReason: billingProfile === 'CORPORATE' ? corporateReason.trim() : undefined,
       });
 
+      if (ride.requiresApproval && ride.status === 'REQUESTED') {
+        setApprovalSubmittedModal(true);
+      }
       setActiveRide(ride);
     } catch (err: any) {
       setErrorMessage(err.message || 'Ride booking failed');
@@ -397,7 +436,7 @@ export const CustomerBookingPage: React.FC = () => {
   };
 
   const selectedCategoryEstimate = estimates?.estimates?.find((e) => e.category === selectedCategory);
-  const isSelectedCategoryUnavailable = selectedCategory === 'WOMEN_BIKE' && selectedCategoryEstimate && !selectedCategoryEstimate.isAvailable;
+  const isSelectedCategoryUnavailable = Boolean(selectedCategory === 'WOMEN_BIKE' && selectedCategoryEstimate && !selectedCategoryEstimate.isAvailable);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -603,6 +642,120 @@ export const CustomerBookingPage: React.FC = () => {
                     <div className="h-16 bg-slate-100 rounded-2xl border border-slate-200"></div>
                     <div className="h-16 bg-slate-100 rounded-2xl border border-slate-200"></div>
                   </div>
+                </div>
+              )}
+
+              {/* Billing Profile Toggle: Personal vs Corporate */}
+              <div className="bg-slate-100 p-1.5 rounded-2xl flex items-center gap-1.5 border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setBillingProfile('PERSONAL')}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    billingProfile === 'PERSONAL'
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <UserIcon className="w-3.5 h-3.5" />
+                  <span>Personal Profile</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBillingProfile('CORPORATE')}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    billingProfile === 'CORPORATE'
+                      ? 'bg-amber-400 text-slate-950 shadow-sm font-extrabold'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5 text-slate-900" />
+                  <span>Corporate Account</span>
+                </button>
+              </div>
+
+              {/* Personal Pass Active Banner */}
+              {billingProfile === 'PERSONAL' && activeSubscription && (
+                <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🎟️</span>
+                    <div>
+                      <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <span>{activeSubscription.planName}</span>
+                        <span className="text-[10px] font-extrabold bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">
+                          ACTIVE PASS
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-amber-700">
+                        {activeSubscription.remainingFreeRides > 0
+                          ? `${activeSubscription.remainingFreeRides} Free Rides remaining this month`
+                          : `Tier percentage discount applies automatically`}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-emerald-600 bg-white px-2 py-1 rounded-lg border border-amber-200">
+                    Auto-Applied
+                  </span>
+                </div>
+              )}
+
+              {/* Corporate Allowance Status Banner */}
+              {billingProfile === 'CORPORATE' && (
+                <div className="space-y-3">
+                  {corporateMember ? (
+                    <div className="p-3.5 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-amber-400" />
+                          <span className="text-xs font-bold">{corporateEligibility?.companyName || 'Corporate Account'}</span>
+                          <span className="text-[10px] font-semibold bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full">
+                            {corporateMember.role}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-emerald-400">
+                          ₹{corporateMember.remainingBudget} Allowance
+                        </span>
+                      </div>
+
+                      {corporateEligibility && corporateEligibility.requiresApproval && (
+                        <div className="p-2 rounded-xl bg-amber-400/10 border border-amber-400/20 text-amber-300 text-[11px] flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                          <span>{corporateEligibility.reason}</span>
+                        </div>
+                      )}
+
+                      {!corporateEligibility?.eligible && corporateEligibility?.reason && (
+                        <div className="p-2 rounded-xl bg-red-400/10 border border-red-400/20 text-red-300 text-[11px] flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                          <span>{corporateEligibility.reason}</span>
+                        </div>
+                      )}
+
+                      {/* Business Purpose Input */}
+                      <div className="pt-1">
+                        <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                          Business Trip Purpose / Expense Note (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={corporateReason}
+                          onChange={(e) => setCorporateReason(e.target.value)}
+                          placeholder="e.g. Client visit, ITPL conference, Airport dispatch"
+                          className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 flex items-start gap-2.5">
+                      <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <div className="font-bold text-amber-950">No Enrolled Corporate Account</div>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Your account ({user?.email}) is not enrolled in an active corporate roster. Switch to Personal profile or register your company on VeloGo Corporate.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -843,17 +996,51 @@ export const CustomerBookingPage: React.FC = () => {
               {/* Book Ride Action */}
               <button
                 type="button"
-                disabled={isBooking || !estimates || isSelectedCategoryUnavailable}
+                disabled={Boolean(
+                  isBooking ||
+                  !estimates ||
+                  isSelectedCategoryUnavailable ||
+                  (billingProfile === 'CORPORATE' && (!corporateMember || (corporateEligibility && !corporateEligibility.eligible)))
+                )}
                 onClick={handleBookRide}
-                className={`w-full font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50 ${
-                  selectedCategory === 'WOMEN_BIKE'
+                className={`w-full font-black py-4 px-6 rounded-2xl shadow-glow text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.01] disabled:opacity-50 cursor-pointer ${
+                  billingProfile === 'CORPORATE'
+                    ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-300'
+                    : selectedCategory === 'WOMEN_BIKE'
                     ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-200'
                     : 'bg-brand-500 hover:bg-brand-600 text-slate-950'
                 }`}
               >
-                {isBooking ? 'Dispatching Request...' : isSelectedCategoryUnavailable ? 'No Women-Only Captains Nearby' : 'Confirm & Request Captain'}
+                {isBooking
+                  ? 'Dispatching Request...'
+                  : isSelectedCategoryUnavailable
+                  ? 'No Women-Only Captains Nearby'
+                  : billingProfile === 'CORPORATE' && corporateEligibility?.requiresApproval
+                  ? 'Submit for Manager Approval'
+                  : 'Confirm & Request Captain'}
                 <ArrowRight className="w-5 h-5" />
               </button>
+
+              {/* Approval Notification Modal */}
+              {approvalSubmittedModal && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl text-center space-y-4">
+                    <div className="w-14 h-14 bg-amber-400/10 text-amber-400 border border-amber-400/20 rounded-2xl flex items-center justify-center mx-auto">
+                      <Building2 className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">Trip Submitted for Approval</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Your corporate ride request exceeds your company's standard policy threshold and has been submitted to your manager for review. You will receive an instant notification once approved.
+                    </p>
+                    <button
+                      onClick={() => setApprovalSubmittedModal(false)}
+                      className="w-full py-2.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Understood
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

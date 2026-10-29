@@ -7,7 +7,9 @@ import com.velogo.domain.enums.PaymentStatus;
 import com.velogo.domain.enums.RideStatus;
 import com.velogo.domain.enums.VehicleCategory;
 import com.velogo.domain.enums.VerificationStatus;
+import com.velogo.dto.CorporateDtos;
 import com.velogo.dto.RideDtos;
+import com.velogo.dto.SubscriptionDtos;
 import com.velogo.exception.BadRequestException;
 import com.velogo.exception.ForbiddenException;
 import com.velogo.exception.ResourceNotFoundException;
@@ -42,11 +44,19 @@ public class RideService {
     private final MatchingService matchingService;
     private final NotificationService notificationService;
     private final RideEventPublisher eventPublisher;
+    private final SubscriptionService subscriptionService;
+    private final CorporateService corporateService;
+    private final CompanyRepository companyRepository;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional(readOnly = true)
     public RideDtos.FareEstimateResponse estimateFares(RideDtos.FareEstimateRequest req) {
+        return estimateFares(req, null);
+    }
+
+    @Transactional(readOnly = true)
+    public RideDtos.FareEstimateResponse estimateFares(RideDtos.FareEstimateRequest req, String userId) {
         RoutingService.RouteInfo route = routingService.getRoute(
                 req.pickupLat(), req.pickupLng(),
                 req.destLat(), req.destLng()
@@ -71,6 +81,20 @@ public class RideService {
                 case WOMEN_BIKE -> "Women-Only Bike";
             };
 
+            BigDecimal subscriptionDiscount = BigDecimal.ZERO;
+            boolean isFreeRide = false;
+            BigDecimal payableFare = breakdown.totalFare();
+
+            if (userId != null) {
+                SubscriptionDtos.SubscriptionDiscountCalculationDto subDiscount =
+                        subscriptionService.calculateDiscountForFare(userId, breakdown.totalFare());
+                if (subDiscount != null && subDiscount.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    subscriptionDiscount = subDiscount.discountAmount();
+                    isFreeRide = subDiscount.isFreeRide();
+                    payableFare = subDiscount.finalFare();
+                }
+            }
+
             estimates.add(new RideDtos.CategoryEstimateDto(
                     cat,
                     catName,
@@ -83,8 +107,10 @@ public class RideService {
                     breakdown.bookingFee(),
                     breakdown.taxAmount(),
                     breakdown.discountAmount(),
-                    breakdown.totalFare(),
-                    available
+                    payableFare,
+                    available,
+                    subscriptionDiscount,
+                    isFreeRide
             ));
         }
 
@@ -171,11 +197,47 @@ public class RideService {
 
         String otp = String.format("%04d", secureRandom.nextInt(10000));
 
+        // Corporate Account check
+        boolean isCorporate = req.billingProfile() == com.velogo.domain.enums.BillingProfile.CORPORATE;
+        Company corporateCompany = null;
+        boolean requiresCorporateApproval = false;
+
+        if (isCorporate && corporateService != null) {
+            CorporateDtos.CorporateBookingEligibilityDto eligibility = corporateService.checkCorporateBookingEligibility(customer, fare.totalFare());
+            if (!eligibility.eligible()) {
+                throw new BadRequestException("Corporate ride booking failed: " + eligibility.reason());
+            }
+            corporateCompany = companyRepository != null ? companyRepository.findById(eligibility.companyId()).orElse(null) : null;
+            requiresCorporateApproval = eligibility.requiresApproval();
+        }
+
+        // Subscription discount check (only for personal rides)
+        UserSubscription userSubscription = null;
+        BigDecimal subscriptionDiscount = BigDecimal.ZERO;
+        boolean isFreeRide = false;
+
+        if (!isCorporate && subscriptionService != null) {
+            Optional<SubscriptionService.SubscriptionDiscountResult> subDiscount = subscriptionService.evaluateSubscriptionDiscount(customer.getId(), fare.totalFare());
+            if (subDiscount.isPresent()) {
+                SubscriptionService.SubscriptionDiscountResult res = subDiscount.get();
+                userSubscription = res.subscription();
+                subscriptionDiscount = res.discountAmount();
+                isFreeRide = res.isFreeRide();
+            }
+        }
+
+        BigDecimal calculatedFinalFare = fare.totalFare().subtract(subscriptionDiscount).max(BigDecimal.ZERO);
+
+        RideStatus initialRideStatus = requiresCorporateApproval ? RideStatus.REQUESTED : RideStatus.SEARCHING;
+        com.velogo.domain.enums.CorporateApprovalStatus initialApprovalStatus = isCorporate
+                ? (requiresCorporateApproval ? com.velogo.domain.enums.CorporateApprovalStatus.PENDING : com.velogo.domain.enums.CorporateApprovalStatus.APPROVED)
+                : com.velogo.domain.enums.CorporateApprovalStatus.NOT_REQUIRED;
+
         Ride ride = Ride.builder()
                 .id(UUID.randomUUID().toString())
                 .customer(customer)
                 .vehicleCategory(req.vehicleCategory())
-                .status(RideStatus.SEARCHING)
+                .status(initialRideStatus)
                 .pickupAddress(req.pickupAddress())
                 .pickupLatitude(req.pickupLat())
                 .pickupLongitude(req.pickupLng())
@@ -185,8 +247,8 @@ public class RideService {
                 .distanceKm(route.distanceKm())
                 .durationMinutes(route.durationMinutes())
                 .estimatedFare(fare.totalFare())
-                .finalFare(fare.totalFare())
-                .discountAmount(fare.discountAmount())
+                .finalFare(calculatedFinalFare)
+                .discountAmount(fare.discountAmount().add(subscriptionDiscount))
                 .taxAmount(fare.taxAmount())
                 .couponCode(fare.couponCode())
                 .otpCode(otp)
@@ -196,9 +258,22 @@ public class RideService {
                 .travelerRelationship(travelerRelationship)
                 .travelerGender(travelerGender)
                 .passengerDeclarationAcknowledged(Boolean.TRUE.equals(req.passengerDeclarationAcknowledged()))
+                .billingProfile(isCorporate ? com.velogo.domain.enums.BillingProfile.CORPORATE : com.velogo.domain.enums.BillingProfile.PERSONAL)
+                .company(corporateCompany)
+                .corporateApprovalStatus(initialApprovalStatus)
+                .requiresApproval(requiresCorporateApproval)
+                .subscription(userSubscription)
+                .subscriptionDiscount(subscriptionDiscount)
+                .isSubscriptionFreeRide(isFreeRide)
                 .build();
 
         Ride savedRide = rideRepository.save(ride);
+
+        if (requiresCorporateApproval && corporateService != null) {
+            corporateService.createApprovalRequest(savedRide, customer, fare.totalFare(), req.corporateReason());
+            recordStatusHistory(savedRide, null, RideStatus.REQUESTED, "Ride requested and submitted for corporate manager approval");
+            return toRideDto(savedRide);
+        }
 
         // Record history
         recordStatusHistory(savedRide, null, RideStatus.SEARCHING, "Customer requested ride and searching for nearby captains");
@@ -369,6 +444,30 @@ public class RideService {
             cp.setTotalRides(cp.getTotalRides() + 1);
             customerProfileRepository.save(cp);
         });
+
+        // Deduct from corporate budget if applicable
+        if (updated.getBillingProfile() == com.velogo.domain.enums.BillingProfile.CORPORATE && updated.getCompany() != null) {
+            corporateService.deductCorporateBudget(updated.getCompany().getId(), updated.getCustomer().getId(), updated.getFinalFare());
+            paymentRepository.findByRideId(updated.getId()).ifPresent(p -> {
+                p.setStatus(PaymentStatus.SUCCESS);
+                p.setMethod(PaymentMethod.CORPORATE);
+                p.setCompletedAt(LocalDateTime.now());
+                paymentRepository.save(p);
+            });
+        }
+
+        // Record subscription usage if applied
+        if (updated.getSubscription() != null) {
+            subscriptionService.recordUsage(updated.getSubscription(), updated, updated.getSubscriptionDiscount(), updated.isSubscriptionFreeRide());
+            if (updated.isSubscriptionFreeRide()) {
+                paymentRepository.findByRideId(updated.getId()).ifPresent(p -> {
+                    p.setStatus(PaymentStatus.SUCCESS);
+                    p.setMethod(PaymentMethod.SUBSCRIPTION_PASS);
+                    p.setCompletedAt(LocalDateTime.now());
+                    paymentRepository.save(p);
+                });
+            }
+        }
 
         recordStatusHistory(updated, RideStatus.IN_PROGRESS, RideStatus.COMPLETED,
                 "Trip completed successfully. Final fare: ₹" + ride.getFinalFare());
@@ -568,7 +667,50 @@ public class RideService {
                 r.getCreatedAt() != null ? r.getCreatedAt().format(dtf) : null,
                 r.getAcceptedAt() != null ? r.getAcceptedAt().format(dtf) : null,
                 r.getStartedAt() != null ? r.getStartedAt().format(dtf) : null,
-                r.getCompletedAt() != null ? r.getCompletedAt().format(dtf) : null
+                r.getCompletedAt() != null ? r.getCompletedAt().format(dtf) : null,
+                r.getBillingProfile() != null ? r.getBillingProfile() : com.velogo.domain.enums.BillingProfile.PERSONAL,
+                r.getCompany() != null ? r.getCompany().getId() : null,
+                r.getCompany() != null ? r.getCompany().getName() : null,
+                r.getCorporateApprovalStatus() != null ? r.getCorporateApprovalStatus() : com.velogo.domain.enums.CorporateApprovalStatus.NOT_REQUIRED,
+                r.isRequiresApproval(),
+                r.getSubscriptionDiscount() != null ? r.getSubscriptionDiscount() : BigDecimal.ZERO,
+                r.isSubscriptionFreeRide()
         );
+    }
+
+    @Transactional
+    public void onCorporateRideApproved(String rideId) {
+        Ride ride = rideRepository.findById(rideId).orElse(null);
+        if (ride == null) return;
+        ride.setCorporateApprovalStatus(com.velogo.domain.enums.CorporateApprovalStatus.APPROVED);
+        ride.setStatus(RideStatus.SEARCHING);
+        Ride saved = rideRepository.save(ride);
+        recordStatusHistory(saved, RideStatus.REQUESTED, RideStatus.SEARCHING, "Corporate ride approved by manager, searching for captains");
+
+        // Dispatch to candidate captains
+        List<MatchingService.CandidateCaptain> nearbyCaptains = matchingService.findNearbyCaptains(
+                saved.getVehicleCategory(), saved.getPickupLatitude(), saved.getPickupLongitude()
+        );
+        for (MatchingService.CandidateCaptain candidate : nearbyCaptains) {
+            matchingService.dispatchRideToCaptain(saved, candidate.captain());
+        }
+
+        RideDtos.RideDto dto = toRideDto(saved);
+        eventPublisher.publishRideUpdate(ride.getId(), dto);
+    }
+
+    @Transactional
+    public void onCorporateRideRejected(String rideId, String reason) {
+        Ride ride = rideRepository.findById(rideId).orElse(null);
+        if (ride == null) return;
+        ride.setCorporateApprovalStatus(com.velogo.domain.enums.CorporateApprovalStatus.REJECTED);
+        ride.setStatus(RideStatus.CANCELLED);
+        ride.setCancellationReason("Corporate ride request rejected by manager: " + (reason != null ? reason : "Policy non-compliance"));
+        ride.setCancelledBy("MANAGER");
+        Ride saved = rideRepository.save(ride);
+        recordStatusHistory(saved, RideStatus.REQUESTED, RideStatus.CANCELLED, "Corporate ride rejected by manager");
+
+        RideDtos.RideDto dto = toRideDto(saved);
+        eventPublisher.publishRideUpdate(ride.getId(), dto);
     }
 }

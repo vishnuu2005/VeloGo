@@ -27,8 +27,12 @@ public class RideController {
 
     @PostMapping("/estimate")
     @Operation(summary = "Estimate fares for all vehicle categories between pickup and destination")
-    public ResponseEntity<RideDtos.FareEstimateResponse> estimateFares(@Valid @RequestBody RideDtos.FareEstimateRequest req) {
-        return ResponseEntity.ok(rideService.estimateFares(req));
+    public ResponseEntity<RideDtos.FareEstimateResponse> estimateFares(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody RideDtos.FareEstimateRequest req
+    ) {
+        String userId = userDetails != null ? userDetails.getId() : null;
+        return ResponseEntity.ok(rideService.estimateFares(req, userId));
     }
 
     @PostMapping({"", "/book"})

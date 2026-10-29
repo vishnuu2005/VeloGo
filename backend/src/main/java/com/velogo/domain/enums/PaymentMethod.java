@@ -2,5 +2,7 @@ package com.velogo.domain.enums;
 
 public enum PaymentMethod {
     CASH,
-    RAZORPAY
+    RAZORPAY,
+    CORPORATE,
+    SUBSCRIPTION_PASS
 }

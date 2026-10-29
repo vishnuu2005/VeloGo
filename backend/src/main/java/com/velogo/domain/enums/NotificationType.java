@@ -5,5 +5,6 @@ public enum NotificationType {
     PAYMENT,
     VERIFICATION,
     PROMO,
-    SECURITY
+    SECURITY,
+    SYSTEM
 }

@@ -13,6 +13,8 @@ import {
   Compass,
   LayoutDashboard,
   Car,
+  Building2,
+  Ticket,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -87,6 +89,20 @@ export const Navbar: React.FC = () => {
                 <Shield className="w-4 h-4" /> Admin Console
               </Link>
             )}
+
+            <Link
+              to="/subscriptions"
+              className="text-sm font-semibold text-slate-700 hover:text-brand-600 transition-colors flex items-center gap-1.5"
+            >
+              <Ticket className="w-4 h-4 text-amber-500" /> Commuter Passes
+            </Link>
+
+            <Link
+              to="/corporate"
+              className="text-sm font-semibold text-slate-700 hover:text-brand-600 transition-colors flex items-center gap-1.5"
+            >
+              <Building2 className="w-4 h-4 text-cyan-600" /> Corporate
+            </Link>
 
             <Link
               to="/safety"

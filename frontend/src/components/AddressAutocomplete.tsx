@@ -44,6 +44,7 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
   // Sync internal query when external value updates (e.g. from GPS or map click)
   useEffect(() => {
     setQuery(value);
+    setIsOpen(false);
   }, [value]);
 
   // Click outside listener

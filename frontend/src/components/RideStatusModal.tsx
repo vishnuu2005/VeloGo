@@ -17,6 +17,7 @@ import {
   Star,
   XCircle,
   AlertTriangle,
+  Building2,
 } from 'lucide-react';
 import { RatingDialog } from './RatingDialog';
 import { ReceiptModal } from './ReceiptModal';
@@ -118,6 +119,7 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
           </div>
           <div>
             <h3 className="font-extrabold text-base tracking-tight text-white flex items-center gap-2">
+              {ride.status === 'REQUESTED' && 'Corporate Approval Pending'}
               {ride.status === 'SEARCHING' && 'Connecting to Nearby Captain'}
               {ride.status === 'ACCEPTED' && 'Captain Assigned'}
               {ride.status === 'ARRIVING' && 'Captain On the Way'}
@@ -130,8 +132,12 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
           </div>
         </div>
 
-        <span className="text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-brand-500 text-slate-950">
-          {ride.status}
+        <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+          ride.status === 'REQUESTED'
+            ? 'bg-amber-400 text-slate-950 animate-pulse'
+            : 'bg-brand-500 text-slate-950'
+        }`}>
+          {ride.status === 'REQUESTED' ? 'PENDING APPROVAL' : ride.status}
         </span>
       </div>
 
@@ -146,7 +152,9 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
       {ride.status !== 'CANCELLED' && (
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
           <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-            <span className={step >= 1 ? 'text-brand-600' : ''}>1. Searching</span>
+            <span className={ride.status === 'REQUESTED' ? 'text-amber-600 font-extrabold' : step >= 1 ? 'text-brand-600' : ''}>
+              {ride.status === 'REQUESTED' ? '0. Approval' : '1. Searching'}
+            </span>
             <span className={step >= 2 ? 'text-brand-600' : ''}>2. Assigned</span>
             <span className={step >= 3 ? 'text-brand-600' : ''}>3. Arrived</span>
             <span className={step >= 4 ? 'text-brand-600' : ''}>4. Riding</span>
@@ -154,14 +162,29 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
           </div>
           <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
             <div
-              className="bg-brand-500 h-full transition-all duration-500 rounded-full"
-              style={{ width: `${(step / 5) * 100}%` }}
+              className={`h-full transition-all duration-500 rounded-full ${ride.status === 'REQUESTED' ? 'bg-amber-400' : 'bg-brand-500'}`}
+              style={{ width: `${ride.status === 'REQUESTED' ? 10 : (step / 5) * 100}%` }}
             />
           </div>
         </div>
       )}
 
       <div className="p-6 space-y-6">
+        {/* State 0: Corporate Approval Pending */}
+        {ride.status === 'REQUESTED' && (
+          <div className="text-center py-6 space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-amber-400/10 border border-amber-400/20 text-amber-500 flex items-center justify-center mx-auto shadow-sm">
+              <Building2 className="w-8 h-8" />
+            </div>
+            <h4 className="font-extrabold text-lg text-slate-900">
+              Waiting for Corporate Admin Approval
+            </h4>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              This trip exceeds your company allowance or standard threshold and has been submitted to your manager. Once approved, we will automatically match you with a nearby captain.
+            </p>
+          </div>
+        )}
+
         {/* State 1: SEARCHING Radar */}
         {ride.status === 'SEARCHING' && (
           <div className="text-center py-6">
@@ -278,12 +301,16 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
             <p className="text-[11px] font-semibold text-slate-400">Payment Status</p>
             <span
               className={`inline-block text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                ride.paymentStatus === 'SUCCESS'
+                ride.paymentStatus === 'SUCCESS' || ride.paymentMethod === 'CORPORATE' || ride.paymentMethod === 'SUBSCRIPTION_PASS'
                   ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-amber-100 text-amber-800'
               }`}
             >
-              {ride.paymentStatus} ({ride.paymentMethod})
+              {ride.paymentMethod === 'CORPORATE'
+                ? 'Corporate Billed'
+                : ride.paymentMethod === 'SUBSCRIPTION_PASS'
+                ? 'Pass Covered'
+                : `${ride.paymentStatus} (${ride.paymentMethod})`}
             </span>
           </div>
         </div>
@@ -291,7 +318,7 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
         {/* Action Buttons based on status */}
         {ride.status === 'COMPLETED' ? (
           <div className="space-y-3 pt-2">
-            {ride.paymentStatus !== 'SUCCESS' ? (
+            {ride.paymentStatus !== 'SUCCESS' && ride.paymentMethod !== 'CORPORATE' && ride.paymentMethod !== 'SUBSCRIPTION_PASS' ? (
               <div className="grid grid-cols-2 gap-3">
                 <button
                   disabled={isProcessingPayment}
