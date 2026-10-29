@@ -36,7 +36,11 @@ public class RoutingService {
             Integer durationMinutes,
             List<List<Double>> geometry,
             List<RouteStep> steps
-    ) {}
+    ) {
+        public RouteInfo(BigDecimal distanceKm, Integer durationMinutes, List<List<Double>> geometry) {
+            this(distanceKm, durationMinutes, geometry, List.of());
+        }
+    }
 
     public RouteInfo getRoute(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng) {
         if (osrmUrl != null && !osrmUrl.isBlank()) {
