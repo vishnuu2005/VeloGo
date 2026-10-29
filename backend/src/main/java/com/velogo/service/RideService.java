@@ -93,7 +93,12 @@ public class RideService {
             couponApplied = fareCalculationService.validateCoupon(req.couponCode(), estimates.get(0).totalFare());
         }
 
-        return new RideDtos.FareEstimateResponse(route.distanceKm(), route.durationMinutes(), estimates, couponApplied, route.geometry());
+        List<RideDtos.RouteStepDto> stepDtos = route.steps() != null
+                ? route.steps().stream().map(s -> new RideDtos.RouteStepDto(
+                        s.instruction(), s.streetName(), s.maneuver(), s.distanceMeters(), s.durationSeconds()
+                )).toList()
+                : List.of();
+        return new RideDtos.FareEstimateResponse(route.distanceKm(), route.durationMinutes(), estimates, couponApplied, route.geometry(), stepDtos);
     }
 
     @Transactional

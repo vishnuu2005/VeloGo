@@ -44,12 +44,21 @@ public class RideDtos {
             String description
     ) {}
 
+    public record RouteStepDto(
+            String instruction,
+            String streetName,
+            String maneuver,
+            double distanceMeters,
+            int durationSeconds
+    ) {}
+
     public record FareEstimateResponse(
             BigDecimal distanceKm,
             Integer durationMinutes,
             List<CategoryEstimateDto> estimates,
             CouponAppliedDto couponApplied,
-            List<List<Double>> routeGeometry
+            List<List<Double>> routeGeometry,
+            List<RouteStepDto> steps
     ) {}
 
     public record BookRideRequest(
