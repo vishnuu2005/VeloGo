@@ -91,6 +91,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         localStorage.removeItem('velogo_token');
         localStorage.removeItem('velogo_refresh_token');
         localStorage.removeItem('velogo_user');
+        if (typeof window !== 'undefined') { window.dispatchEvent(new CustomEvent('velogo:auth-expired')); }
       }
     }
   }
