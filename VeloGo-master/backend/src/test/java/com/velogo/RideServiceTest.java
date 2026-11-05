@@ -7,6 +7,7 @@ import com.velogo.domain.enums.VehicleCategory;
 import com.velogo.domain.enums.VerificationStatus;
 import com.velogo.dto.RideDtos;
 import com.velogo.exception.BadRequestException;
+import com.velogo.exception.ForbiddenException;
 import com.velogo.repository.*;
 import com.velogo.service.*;
 import com.velogo.websocket.RideEventPublisher;
@@ -20,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -188,5 +190,123 @@ class RideServiceTest {
         assertTrue(captainProfile.isAvailable()); // Captain freed up
         assertEquals(11, captainProfile.getTotalRides());
         assertEquals(new BigDecimal("1085.00"), captainProfile.getTotalEarnings());
+    }
+
+    @Test
+    void testCustomerCancelsRide_ReleasesCaptainAndSetsCancelled() {
+        captainProfile.setAvailable(false);
+        Ride ride = Ride.builder()
+                .id("ride-cancel-1")
+                .customer(customer)
+                .captain(captainProfile)
+                .status(RideStatus.ACCEPTED)
+                .build();
+
+        when(rideRepository.findById("ride-cancel-1")).thenReturn(Optional.of(ride));
+        when(rideRepository.save(any(Ride.class))).thenAnswer(i -> i.getArgument(0));
+
+        RideDtos.RideDto cancelled = rideService.cancelRide("cust-1", "ride-cancel-1", "Changed my mind");
+
+        assertEquals(RideStatus.CANCELLED, cancelled.status());
+        assertEquals("Changed my mind", cancelled.cancellationReason());
+        assertEquals("CUSTOMER", cancelled.cancelledBy());
+        assertTrue(captainProfile.isAvailable()); // Captain freed up
+        verify(captainRepository).save(captainProfile);
+        verify(eventPublisher).publishRideUpdate(eq("ride-cancel-1"), any());
+    }
+
+    @Test
+    void testCancelRide_ThrowsForbiddenWhenUserNotParticipant() {
+        Ride ride = Ride.builder()
+                .id("ride-cancel-2")
+                .customer(customer)
+                .captain(captainProfile)
+                .status(RideStatus.ACCEPTED)
+                .build();
+
+        when(rideRepository.findById("ride-cancel-2")).thenReturn(Optional.of(ride));
+
+        assertThrows(ForbiddenException.class, () ->
+                rideService.cancelRide("unauthorized-user-999", "ride-cancel-2", "Cancel attempt")
+        );
+        verify(rideRepository, never()).save(any());
+    }
+
+    @Test
+    void testCancelRide_ThrowsBadRequestWhenTripInProgress() {
+        Ride ride = Ride.builder()
+                .id("ride-cancel-3")
+                .customer(customer)
+                .captain(captainProfile)
+                .status(RideStatus.IN_PROGRESS)
+                .build();
+
+        when(rideRepository.findById("ride-cancel-3")).thenReturn(Optional.of(ride));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                rideService.cancelRide("cust-1", "ride-cancel-3", "Too slow")
+        );
+        assertTrue(ex.getMessage().contains("Cannot cancel a trip that is already in progress"));
+    }
+
+    @Test
+    void testCaptainArriveAtPickup_TransitionsToArrived() {
+        Ride ride = Ride.builder()
+                .id("ride-arrived-1")
+                .customer(customer)
+                .captain(captainProfile)
+                .status(RideStatus.ACCEPTED)
+                .otpCode("4321")
+                .build();
+
+        when(rideRepository.findById("ride-arrived-1")).thenReturn(Optional.of(ride));
+        when(rideRepository.save(any(Ride.class))).thenAnswer(i -> i.getArgument(0));
+
+        RideDtos.RideDto dto = rideService.captainArriveAtPickup("capt-u-1", "ride-arrived-1");
+
+        assertEquals(RideStatus.ARRIVED, dto.status());
+        verify(notificationService).sendNotification(eq("cust-1"), contains("Arrived"), contains("4321"), any());
+        verify(eventPublisher).publishRideUpdate(eq("ride-arrived-1"), any());
+    }
+
+    @Test
+    void testCaptainArriveAtPickup_ThrowsBadRequestWhenInvalidStatus() {
+        Ride ride = Ride.builder()
+                .id("ride-arrived-2")
+                .customer(customer)
+                .captain(captainProfile)
+                .status(RideStatus.COMPLETED)
+                .build();
+
+        when(rideRepository.findById("ride-arrived-2")).thenReturn(Optional.of(ride));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                rideService.captainArriveAtPickup("capt-u-1", "ride-arrived-2")
+        );
+        assertTrue(ex.getMessage().contains("Cannot mark arrival for ride in status"));
+    }
+
+    @Test
+    void testBookRide_ThrowsBadRequestWhenActiveRideAlreadyExists() {
+        Ride activeRide = Ride.builder()
+                .id("active-ride-1")
+                .customer(customer)
+                .status(RideStatus.ACCEPTED)
+                .build();
+
+        when(rideRepository.findActiveRidesForCustomer("cust-1")).thenReturn(List.of(activeRide));
+
+        RideDtos.BookRideRequest req = new RideDtos.BookRideRequest(
+                new BigDecimal("12.9716"), new BigDecimal("77.5946"), "MG Road",
+                new BigDecimal("12.9352"), new BigDecimal("77.6245"), "Koramangala",
+                VehicleCategory.BIKE, com.velogo.domain.enums.PaymentMethod.CASH, null,
+                false, null, null, null, null, false
+        );
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                rideService.bookRide(customer, req)
+        );
+
+        assertTrue(ex.getMessage().contains("already have an active ride in progress"));
     }
 }
