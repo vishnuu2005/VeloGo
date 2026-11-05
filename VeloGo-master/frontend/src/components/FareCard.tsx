@@ -37,7 +37,7 @@ export const FareCard: React.FC<FareCardProps> = ({ estimate, isSelected, onSele
   return (
     <div
       onClick={onSelect}
-      className={`relative cursor-pointer transition-all duration-200 rounded-2xl border-2 p-4 ${
+      role="button" tabIndex={0} aria-selected={isSelected} className={`relative cursor-pointer transition-all duration-200 rounded-2xl border-2 p-4 ${
         isSelected
           ? isWomenBike
             ? 'border-purple-500 bg-purple-50/40 shadow-glow'
