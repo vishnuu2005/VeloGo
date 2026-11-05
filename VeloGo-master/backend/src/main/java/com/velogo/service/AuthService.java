@@ -40,7 +40,7 @@ public class AuthService {
 
     @Transactional
     public AuthDtos.AuthResponse login(AuthDtos.LoginRequest req) {
-        String identifier = req.emailOrPhone().trim();
+        String identifier = req.emailOrPhone() != null ? req.emailOrPhone().trim() : "";
         User user = userRepository.findByEmail(identifier)
                 .or(() -> userRepository.findByPhone(identifier))
                 .orElseThrow(() -> new UnauthorizedException("Invalid email/phone or password."));
