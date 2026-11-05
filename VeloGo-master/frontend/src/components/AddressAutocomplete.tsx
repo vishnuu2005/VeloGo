@@ -102,6 +102,7 @@ export const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { setIsOpen(false); return; }
     if (!isOpen || suggestions.length === 0) {
       if (e.key === 'Enter' && query.trim().length >= 2) {
         e.preventDefault();
