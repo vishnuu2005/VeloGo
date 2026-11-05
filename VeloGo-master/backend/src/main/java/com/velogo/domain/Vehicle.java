@@ -54,6 +54,9 @@ public class Vehicle {
     }
 
     @PreUpdate
+    public boolean isValidRegistrationFormat() { return registrationNumber != null && registrationNumber.trim().matches("^[A-Z0-9 -]{4,20}$"); }
+
+    @PreUpdate
     public void onPreUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
