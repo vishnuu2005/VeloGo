@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -283,5 +284,29 @@ class RideServiceTest {
                 rideService.captainArriveAtPickup("capt-u-1", "ride-arrived-2")
         );
         assertTrue(ex.getMessage().contains("Cannot mark arrival for ride in status"));
+    }
+
+    @Test
+    void testBookRide_ThrowsBadRequestWhenActiveRideAlreadyExists() {
+        Ride activeRide = Ride.builder()
+                .id("active-ride-1")
+                .customer(customer)
+                .status(RideStatus.ACCEPTED)
+                .build();
+
+        when(rideRepository.findActiveRidesForCustomer("cust-1")).thenReturn(List.of(activeRide));
+
+        RideDtos.BookRideRequest req = new RideDtos.BookRideRequest(
+                new BigDecimal("12.9716"), new BigDecimal("77.5946"), "MG Road",
+                new BigDecimal("12.9352"), new BigDecimal("77.6245"), "Koramangala",
+                VehicleCategory.BIKE, com.velogo.domain.enums.PaymentMethod.CASH, null,
+                false, null, null, null, null, false
+        );
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                rideService.bookRide(customer, req)
+        );
+
+        assertTrue(ex.getMessage().contains("already have an active ride in progress"));
     }
 }
