@@ -74,6 +74,7 @@ public class CaptainService {
         }
 
         captain.setOnline(online);
+        log.info("Captain {} online status toggled to {}", captain.getId(), online);
         captain.setAvailable(online);
         CaptainProfile saved = captainRepository.save(captain);
 
