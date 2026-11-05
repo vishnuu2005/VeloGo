@@ -17,6 +17,7 @@ public interface RideRepository extends JpaRepository<Ride, String> {
 
     Page<Ride> findByCustomerIdOrderByCreatedAtDesc(String customerId, Pageable pageable);
     List<Ride> findByCustomerIdOrderByCreatedAtDesc(String customerId);
+    List<Ride> findTop10ByCustomerIdAndStatusOrderByCreatedAtDesc(String customerId, RideStatus status);
 
     Page<Ride> findByCaptainIdOrderByCreatedAtDesc(String captainId, Pageable pageable);
     List<Ride> findByCaptainIdOrderByCreatedAtDesc(String captainId);
