@@ -361,6 +361,7 @@ export const CustomerBookingPage: React.FC = () => {
   };
 
   const handleBookRide = async () => {
+    if (pickupLocation && destinationLocation && Math.abs(pickupLocation.lat - destinationLocation.lat) < 0.0001 && Math.abs(pickupLocation.lng - destinationLocation.lng) < 0.0001) { alert('Pickup and dropoff cannot be the exact same point.'); return; }
     if (!user) {
       navigate('/login?redirect=/book');
       return;
