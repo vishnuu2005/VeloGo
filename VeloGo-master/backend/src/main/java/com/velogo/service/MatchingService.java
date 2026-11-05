@@ -48,6 +48,7 @@ public class MatchingService {
                 ? captainRepository.findAvailableCaptainsForWomenOnly()
                 : captainRepository.findAvailableCaptainsByCategory(category);
 
+        log.debug("Evaluating {} eligible captains for dispatch search", eligibleCaptains.size());
         return eligibleCaptains.stream()
                 .filter(c -> c.getCurrentLatitude() != null && c.getCurrentLongitude() != null)
                 .map(c -> {
