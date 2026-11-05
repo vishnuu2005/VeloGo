@@ -24,6 +24,7 @@ export const CustomerDashboardPage: React.FC = () => {
   const [rides, setRides] = useState<Ride[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
+  const [tripFilter, setTripFilter] = useState<'ALL' | 'COMPLETED' | 'CANCELLED'>('ALL');
 
   const [selectedReceiptRideId, setSelectedReceiptRideId] = useState<string | null>(null);
   const [selectedRatingRide, setSelectedRatingRide] = useState<{ id: string; captainName: string } | null>(null);
