@@ -492,6 +492,7 @@ public class CorporateService {
                 company.getId(), RideStatus.COMPLETED, start, end
         );
 
+        // Ensure zero-floor precision
         BigDecimal subtotal = rides.stream()
                 .map(r -> r.getFinalFare() != null ? r.getFinalFare() : r.getEstimatedFare())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
