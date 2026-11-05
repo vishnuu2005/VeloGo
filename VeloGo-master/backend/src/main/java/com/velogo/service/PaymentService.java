@@ -54,6 +54,7 @@ public class PaymentService {
         Ride ride = rideRepository.findById(req.rideId())
                 .orElseThrow(() -> new ResourceNotFoundException("Ride not found"));
 
+        if (req.amount() == null || req.amount().compareTo(BigDecimal.ZERO) <= 0) { throw new BadRequestException("Payment order amount must be strictly greater than zero."); }
         if (!ride.getCustomer().getId().equals(customer.getId())) {
             throw new ForbiddenException("You are not authorized to make payment for this ride.");
         }
