@@ -257,7 +257,7 @@ export const RideStatusModal: React.FC<RideStatusModalProps> = ({
                   <Key className="w-4 h-4 text-amber-600" />
                   <span>Share OTP with Captain to Start Trip:</span>
                 </div>
-                <span className="font-mono text-lg font-black tracking-widest bg-white px-3 py-1 rounded-lg border border-amber-300 text-slate-900 shadow-sm">
+                <span title="Trip Start OTP" className="font-mono text-lg font-black tracking-widest bg-white px-3 py-1 rounded-lg border border-amber-300 text-slate-900 shadow-sm select-all cursor-pointer">
                   {ride.otpCode}
                 </span>
               </div>
