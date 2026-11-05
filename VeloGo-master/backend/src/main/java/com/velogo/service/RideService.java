@@ -492,6 +492,7 @@ public class RideService {
         boolean isCustomer = ride.getCustomer().getId().equals(userId);
         boolean isCaptain = ride.getCaptain() != null && ride.getCaptain().getUser().getId().equals(userId);
 
+        if (ride.getStatus() == RideStatus.COMPLETED || ride.getStatus() == RideStatus.CANCELLED) { throw new BadRequestException("Ride cannot be cancelled as it is already " + ride.getStatus()); }
         if (!isCustomer && !isCaptain) {
             throw new ForbiddenException("You are not authorized to cancel this ride.");
         }
