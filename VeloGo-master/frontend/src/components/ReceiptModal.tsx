@@ -16,7 +16,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ rideId, onClose }) =
     api.payments
       .getReceipt(rideId)
       .then((data) => setReceipt(data))
-      .catch((e) => console.error(e))
+      .catch((e) => console.error('Failed to retrieve receipt details:', e))
       .finally(() => setLoading(false));
   }, [rideId]);
 
