@@ -23,6 +23,7 @@ export const SubscriptionPlansPage: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
   const [checkoutOrder, setCheckoutOrder] = useState<{
     orderId: string;
     planId: string;
