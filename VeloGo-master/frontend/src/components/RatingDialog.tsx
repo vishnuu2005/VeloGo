@@ -74,7 +74,7 @@ export const RatingDialog: React.FC<RatingDialogProps> = ({ rideId, captainName,
             </div>
 
             <textarea
-              rows={3}
+              rows={3} maxLength={300}
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="Tell us what you liked (clean helmet, safe driving, punctuality)..."
