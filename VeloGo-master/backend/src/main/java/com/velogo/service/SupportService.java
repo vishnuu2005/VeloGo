@@ -130,6 +130,7 @@ public class SupportService {
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket not found"));
 
         ticket.setAdminResponse(req.adminResponse());
+        log.info("Updating support ticket {} to status {}", ticketId, req.status());
         ticket.setStatus(req.status());
         SupportTicket saved = ticketRepository.save(ticket);
 
