@@ -68,7 +68,7 @@ public class FareCalculationService {
         BigDecimal taxAmount = afterDiscount.multiply(config.getTaxRatePercent())
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
-        BigDecimal totalFare = afterDiscount.add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalFare = afterDiscount.add(taxAmount).max(config.getMinFare()).setScale(2, RoundingMode.HALF_UP);
 
         return new FareBreakdown(
                 baseFare,
