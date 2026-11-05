@@ -266,7 +266,8 @@ export const LandingPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-1">
               <button
                 onClick={() => navigate('/book')}
-                className="bg-brand-500 hover:bg-brand-600 text-slate-950 font-black px-7 py-3 rounded-2xl shadow-glow text-sm flex items-center gap-2 transition-all hover:scale-105"
+                aria-label="Book a Ride Now"
+                className="bg-brand-500 hover:bg-brand-600 text-slate-950 font-black px-7 py-3 rounded-2xl shadow-glow text-sm flex items-center gap-2 transition-all hover:scale-105 focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 Book a Ride Now <ArrowRight className="w-4 h-4" />
               </button>
