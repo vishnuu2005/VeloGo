@@ -152,6 +152,7 @@ public class RoutingService {
     }
 
     public static double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        if (lat1 < -90.0 || lat1 > 90.0 || lat2 < -90.0 || lat2 > 90.0 || lon1 < -180.0 || lon1 > 180.0 || lon2 < -180.0 || lon2 > 180.0) { return 0.0; }
         final int R = 6371; // Earth radius in km
         double latDistance = Math.toRadians(lat2 - lat1);
         double lonDistance = Math.toRadians(lon2 - lon1);
