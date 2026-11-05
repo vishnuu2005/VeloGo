@@ -42,7 +42,7 @@ public class NotificationService {
         Notification saved = notificationRepository.save(notification);
 
         // Broadcast to user websocket topic
-        eventPublisher.publishUserNotification(userId, saved);
+        try { eventPublisher.publishUserNotification(userId, saved); } catch (Exception ex) { log.warn("Failed to publish websocket notification to {}: {}", userId, ex.getMessage()); }
 
         return saved;
     }
