@@ -65,6 +65,7 @@ export const CaptainDashboardPage: React.FC = () => {
   // Incoming dispatch offer with countdown
   const [incomingDispatch, setIncomingDispatch] = useState<any | null>(null);
   const [countdown, setCountdown] = useState(45);
+  const [soundAlertsEnabled, setSoundAlertsEnabled] = useState(true);
 
   // OTP dialog
   const [showOtpDialog, setShowOtpDialog] = useState(false);
